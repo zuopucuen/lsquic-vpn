@@ -8,13 +8,14 @@ git submodule update --init --recursive
 ```
 2. Compile the library
 ```
-cmake .
+cmake . -B build
+cd build
 make
 ```
 3.Running the server
 ```
 # server
-./echo_server -c www.example.com,certs/server.crt,certs/ca-key.pem  -s 0.0.0.0:4433 -L debug
+./echo_server -c www.example.com,../certs/server.crt,../certs/ca-key.pem  -s 0.0.0.0:4433 -L debug
 
 
 # client
