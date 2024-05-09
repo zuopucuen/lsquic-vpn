@@ -70,6 +70,31 @@
 #define endian_swap64(x) (x)
 #endif
 
+typedef struct Context_ {
+    const char *  wanted_if_name;
+    const char *  local_tun_ip;
+    const char *  remote_tun_ip;
+    const char *  local_tun_ip6;
+    const char *  remote_tun_ip6;
+    const char *  server_ip_or_name;
+    const char *  server_port;
+    const char *  ext_if_name;
+    const char *  wanted_ext_gw_ip;
+    char          client_ip[NI_MAXHOST];
+    char          ext_gw_ip[64];
+    char          server_ip[64];
+    char          if_name[IFNAMSIZ];
+    int           is_server;
+    int           tun_fd;
+    int           client_fd;
+    int           listen_fd;
+    int           congestion;
+    int           firewall_rules_set;
+    struct pollfd fds[3];
+    uint32_t      uc_kx_st[12];
+    uint32_t      uc_st[2][12];
+} Context;
+
 extern volatile sig_atomic_t exit_signal_received;
 
 #endif

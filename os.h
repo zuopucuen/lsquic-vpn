@@ -18,6 +18,8 @@ typedef struct Cmds {
 
 Cmds firewall_rules_cmds(int is_server);
 
+int firewall_rules(Context *context, int set, int silent);
+
 int shell_cmd(const char *substs[][2], const char *args_str, int silent);
 
 const char *get_default_gw_ip(void);

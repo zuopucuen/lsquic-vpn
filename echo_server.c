@@ -18,6 +18,8 @@
 #include "getopt.h"
 #endif
 
+#include <event2/event.h>
+
 #include <lsquic.h>
 #include <lsquic_hash.h>
 #include <lsquic_logger.h>
@@ -28,44 +30,6 @@
 #include "vpn.h"
 #include "os.h"
 
-static const int POLLFD_TUN = 0, POLLFD_LISTENER = 1, POLLFD_CLIENT = 2, POLLFD_COUNT = 3;
-
-typedef struct __attribute__((aligned(16))) Buf_ {
-#if TAG_LEN < 16 - 2
-    unsigned char _pad[16 - TAG_LEN - 2];
-#endif
-    unsigned char len[2];
-    unsigned char tag[TAG_LEN];
-    unsigned char data[MAX_PACKET_LEN];
-    size_t        pos;
-} Buf;
-
-typedef struct Context_ {
-    const char *  wanted_if_name;
-    const char *  local_tun_ip;
-    const char *  remote_tun_ip;
-    const char *  local_tun_ip6;
-    const char *  remote_tun_ip6;
-    const char *  server_ip_or_name;
-    const char *  server_port;
-    const char *  ext_if_name;
-    const char *  wanted_ext_gw_ip;
-    char          client_ip[NI_MAXHOST];
-    char          ext_gw_ip[64];
-    char          server_ip[64];
-    char          if_name[IFNAMSIZ];
-    int           is_server;
-    int           tun_fd;
-    int           client_fd;
-    int           listen_fd;
-    int           congestion;
-    int           firewall_rules_set;
-    Buf           client_buf;
-    struct pollfd fds[3];
-    uint32_t      uc_kx_st[12];
-    uint32_t      uc_st[2][12];
-} Context;
-
 struct lsquic_conn_ctx;
 
 struct echo_server_ctx {
@@ -74,6 +38,7 @@ struct echo_server_ctx {
     int n_conn;
     struct sport_head sports;
     struct prog *prog;
+    Context *vpn_ctx;
 };
 
 struct lsquic_conn_ctx {
@@ -120,10 +85,28 @@ echo_server_on_conn_closed (lsquic_conn_t *conn)
 struct lsquic_stream_ctx {
     lsquic_stream_t     *stream;
     struct echo_server_ctx   *server_ctx;
+    struct event        *read_tun_ev;
     char                 buf[0x100];
     size_t               buf_off;
 };
 
+static void tun_read_handler(int fd, short event, void *ctx){
+    ssize_t              len;
+    lsquic_stream_ctx_t *st_h = ctx;
+
+
+    LSQ_INFO("read from tun!");
+
+    len = tun_read(fd, st_h->buf + st_h->buf_off++, 1400);
+    if (len <= 0) {
+        perror("tun_read");
+        return;
+    }
+
+    LSQ_DEBUG("read newline: wantwrite");
+    lsquic_stream_wantwrite(st_h->stream, 1);
+    lsquic_engine_process_conns(st_h->server_ctx->prog->prog_engine);
+}
 
 static lsquic_stream_ctx_t *
 echo_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
@@ -133,6 +116,11 @@ echo_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     st_h->server_ctx = stream_if_ctx;
     st_h->buf_off = 0;
     lsquic_stream_wantread(stream, 1);
+
+    st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
+                                   st_h->server_ctx->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+    event_add(st_h->read_tun_ev, NULL);
+
     return st_h;
 }
 
@@ -229,41 +217,6 @@ usage (const char *prog)
                 , prog);
 }
 
-static int firewall_rules(Context *context, int set, int silent)
-{
-    const char *       substs[][2] = { { "$LOCAL_TUN_IP6", context->local_tun_ip6 },
-                                { "$REMOTE_TUN_IP6", context->remote_tun_ip6 },
-                                { "$LOCAL_TUN_IP", context->local_tun_ip },
-                                { "$REMOTE_TUN_IP", context->remote_tun_ip },
-                                { "$EXT_IP", context->server_ip },
-                                { "$EXT_PORT", context->server_port },
-                                { "$EXT_IF_NAME", context->ext_if_name },
-                                { "$EXT_GW_IP", context->ext_gw_ip },
-                                { "$IF_NAME", context->if_name },
-                                { NULL, NULL } };
-    const char *const *cmds;
-    size_t             i;
-
-    if (context->firewall_rules_set == set) {
-        return 0;
-    }
-    if ((cmds = (set ? firewall_rules_cmds(context->is_server).set
-                     : firewall_rules_cmds(context->is_server).unset)) == NULL) {
-        fprintf(stderr,
-                "Routing commands for that operating system have not been "
-                "added yet.\n");
-        return 0;
-    }
-    for (i = 0; cmds[i] != NULL; i++) {
-        if (shell_cmd(substs, cmds[i], silent) != 0) {
-            fprintf(stderr, "Unable to run [%s]: [%s]\n", cmds[i], strerror(errno));
-            return -1;
-        }
-    }
-    context->firewall_rules_set = set;
-    return 0;
-}
-
 static int resolve_ip(char *ip, size_t sizeof_ip, const char *ip_or_name)
 {
     struct addrinfo hints, *res;
@@ -294,6 +247,7 @@ main (int argc, char **argv)
 
     memset(&server_ctx, 0, sizeof(server_ctx));
     server_ctx.prog = &prog;
+    server_ctx.vpn_ctx= &context;
     TAILQ_INIT(&server_ctx.sports);
     TAILQ_INIT(&server_ctx.conn_ctxs);
 
@@ -325,6 +279,7 @@ main (int argc, char **argv)
 
     LSQ_DEBUG("entering event loop");
 
+    memset(&context, 0, sizeof(context));
     context.is_server = 1;
     context.server_ip_or_name  = "auto";
     context.server_port    = "auto";

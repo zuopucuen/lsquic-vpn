@@ -32,6 +32,8 @@
 
 #include "common.h"
 #include "prog.h"
+#include "vpn.h"
+#include "os.h"
 
 
 struct lsquic_conn_ctx;
@@ -39,6 +41,7 @@ struct lsquic_conn_ctx;
 struct echo_client_ctx {
     struct lsquic_conn_ctx  *conn_h;
     struct prog                 *prog;
+    Context  *vpn_ctx;
 };
 
 struct lsquic_conn_ctx {
@@ -75,42 +78,28 @@ echo_client_on_conn_closed (lsquic_conn_t *conn)
 struct lsquic_stream_ctx {
     lsquic_stream_t     *stream;
     struct echo_client_ctx   *client_ctx;
-    struct event        *read_stdin_ev;
+    struct event        *read_tun_ev;
     char                 buf[0x100];
     size_t               buf_off;
 };
 
 
-static void
-read_stdin (evutil_socket_t fd, short what, void *ctx)
-{
-    ssize_t nr;
+static void tun_read_handler(int fd, short event, void *ctx){
+    ssize_t              len;
     lsquic_stream_ctx_t *st_h = ctx;
 
-    nr = Read(fd, st_h->buf + st_h->buf_off++, 1);
-    LSQ_DEBUG("read %zd bytes from stdin", nr);
-    if (0 == nr)
-    {
-        lsquic_stream_shutdown(st_h->stream, 2);
+
+    LSQ_INFO("read from tun!");
+
+    len = tun_read(fd, st_h->buf + st_h->buf_off++, 1400);
+    if (len <= 0) {
+        perror("tun_read");
+        return;
     }
-    else if (-1 == nr)
-    {
-        perror("read");
-        exit(1);
-    }
-    else if ('\n' == st_h->buf[ st_h->buf_off - 1 ])
-    {
-        LSQ_DEBUG("read newline: wantwrite");
-        lsquic_stream_wantwrite(st_h->stream, 1);
-        lsquic_engine_process_conns(st_h->client_ctx->prog->prog_engine);
-    }
-    else if (st_h->buf_off == sizeof(st_h->buf))
-    {
-        LSQ_NOTICE("line too long");
-        exit(2);
-    }
-    else
-        event_add(st_h->read_stdin_ev, NULL);
+
+    LSQ_DEBUG("read newline: wantwrite");
+    lsquic_stream_wantwrite(st_h->stream, 1);
+    lsquic_engine_process_conns(st_h->client_ctx->prog->prog_engine);
 }
 
 
@@ -121,9 +110,9 @@ echo_client_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     st_h->stream = stream;
     st_h->client_ctx = stream_if_ctx;
     st_h->buf_off = 0;
-    st_h->read_stdin_ev = event_new(prog_eb(st_h->client_ctx->prog),
-                                    STDIN_FILENO, EV_READ, read_stdin, st_h);
-    event_add(st_h->read_stdin_ev, NULL);
+    st_h->read_tun_ev = event_new(prog_eb(st_h->client_ctx->prog),
+                                    st_h->client_ctx->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+    event_add(st_h->read_tun_ev, NULL);
     return st_h;
 }
 
@@ -144,7 +133,7 @@ echo_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     fflush(stdout);
     if ('\n' == c)
     {
-        event_add(st_h->read_stdin_ev, NULL);
+        event_add(st_h->read_tun_ev, NULL);
         lsquic_stream_wantread(stream, 0);
     }
 }
@@ -169,10 +158,10 @@ static void
 echo_client_on_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     LSQ_NOTICE("%s called", __func__);
-    if (st_h->read_stdin_ev)
+    if (st_h->read_tun_ev)
     {
-        event_del(st_h->read_stdin_ev);
-        event_free(st_h->read_stdin_ev);
+        event_del(st_h->read_tun_ev);
+        event_free(st_h->read_tun_ev);
     }
     free(st_h);
     lsquic_conn_close(lsquic_stream_conn(stream));
@@ -210,6 +199,56 @@ main (int argc, char **argv)
     struct sport_head sports;
     struct prog prog;
     struct echo_client_ctx client_ctx;
+    Context     context;
+
+    memset(&context, 0, sizeof context);
+    context.is_server = 0;
+    context.server_ip_or_name  = "auto";
+    context.server_port    = "auto";
+    context.wanted_if_name = "";
+    context.local_tun_ip = DEFAULT_CLIENT_IP;
+    context.remote_tun_ip = DEFAULT_SERVER_IP;
+    context.wanted_ext_gw_ip = "auto";
+
+    if ((context.ext_if_name = get_default_ext_if_name()) == NULL && context.is_server) {
+        fprintf(stderr, "Unable to automatically determine the external interface\n");
+        return 1;
+    }
+    context.tun_fd = tun_create(context.if_name, context.wanted_if_name);
+    
+    if (context.tun_fd == -1) {
+        perror("tun device creation");
+        return 1;
+    }
+
+    printf("Interface: [%s]\n", context.if_name);
+    if (tun_set_mtu(context.if_name, DEFAULT_MTU) != 0) {
+        perror("mtu");
+    }
+
+    #ifdef __OpenBSD__
+    pledge("stdio proc exec dns inet", NULL);
+#endif
+    context.firewall_rules_set = -1;
+    /*
+    if (context.server_ip_or_name != NULL &&
+        resolve_ip(context.server_ip, sizeof context.server_ip, context.server_ip_or_name) != 0) {
+        firewall_rules(&context, 0, 1);
+        return 1;
+    }
+    */
+    if (context.is_server) {
+        if (firewall_rules(&context, 1, 0) != 0) {
+            return -1;
+        }
+#ifdef __OpenBSD__
+        printf("\nAdd the following rule to /etc/pf.conf:\npass out from %s nat-to egress\n\n",
+               context.remote_tun_ip);
+#endif
+    } else {
+        firewall_rules(&context, 0, 1);
+    }
+
 
 #ifdef WIN32
     fprintf(stderr, "%s does not work on Windows, see\n"
@@ -219,6 +258,7 @@ main (int argc, char **argv)
 
     memset(&client_ctx, 0, sizeof(client_ctx));
     client_ctx.prog = &prog;
+    client_ctx.vpn_ctx = &context;
 
     TAILQ_INIT(&sports);
     prog_init(&prog, 0, &sports, &client_echo_stream_if, &client_ctx);
