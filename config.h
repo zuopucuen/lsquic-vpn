@@ -1,11 +1,11 @@
 #ifndef LSQUIC_CONFIG_H
 #define LSQUIC_CONFIG_H
 
-#define HAVE_SENDMMSG 1
-#define HAVE_RECVMMSG 1
+/* #undef HAVE_SENDMMSG */
+/* #undef HAVE_RECVMMSG */
 #define HAVE_OPEN_MEMSTREAM 1
-/* #undef HAVE_IP_DONTFRAG */
-#define HAVE_IP_MTU_DISCOVER 1
+#define HAVE_IP_DONTFRAG 1
+/* #undef HAVE_IP_MTU_DISCOVER */
 #define HAVE_REGEX 1
 #define HAVE_PREADV 1
 
