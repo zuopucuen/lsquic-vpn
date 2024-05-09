@@ -485,7 +485,6 @@ prog_new_session_cb (SSL *ssl, SSL_SESSION *session)
     return 0;
 }
 
-
 static int
 prog_init_ssl_ctx (struct prog *prog)
 {
@@ -500,13 +499,19 @@ prog_init_ssl_ctx (struct prog *prog)
 
     SSL_CTX_set_min_proto_version(prog->prog_ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(prog->prog_ssl_ctx, TLS1_3_VERSION);
+        
+    // 双向验证
+    // SSL_VERIFY_PEER---要求对证书进行认证，没有证书也会放行
+    // SSL_VERIFY_FAIL_IF_NO_PEER_CERT---要求客户端需要提供证书，但验证发现单独使用没有证书也会放行
     SSL_CTX_set_verify(prog->prog_ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);  
-    SSL_CTX_set_default_verify_paths(prog->prog_ssl_ctx);
 
+    // 设置信任根证书
     if (!SSL_CTX_load_verify_locations(prog->prog_ssl_ctx, "certs/ca-cert.crt", NULL)) {
         LSQ_ERROR("Error loading ca certs");
         return -1;
     }
+
+    SSL_CTX_set_default_verify_paths(prog->prog_ssl_ctx);
 
     /* This is obviously test code: the key is just an array of NUL bytes */
     memset(ticket_keys, 0, sizeof(ticket_keys));
