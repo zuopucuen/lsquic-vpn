@@ -44,6 +44,7 @@ struct prog
     struct sport_head              *prog_sports;
     struct lsquic_engine           *prog_engine;
     const char                     *prog_hostname;
+    const char                     *ca;
     int                             prog_ipver;     /* 0, 4, or 6 */
     enum {
         PROG_FLAG_COOLDOWN  = 1 << 0,

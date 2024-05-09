@@ -275,14 +275,14 @@ prog_set_opt (struct prog *prog, int opt, const char *arg)
         prog->prog_settings.es_cc_algo = atoi(optarg);
         return 0;
     case 'c':
-        if (prog->prog_engine_flags & LSENG_SERVER)
-        {
+        //if (prog->prog_engine_flags & LSENG_SERVER)
+        //{
             if (!prog->prog_certs)
                 prog->prog_certs = lsquic_hash_create();
             return load_cert(prog->prog_certs, arg);
-        }
-        else
-            return -1;
+        //}
+        //else
+        //    return -1;
     case 'H':
         if (prog->prog_engine_flags & LSENG_SERVER)
             return -1;
@@ -500,7 +500,13 @@ prog_init_ssl_ctx (struct prog *prog)
 
     SSL_CTX_set_min_proto_version(prog->prog_ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(prog->prog_ssl_ctx, TLS1_3_VERSION);
+    SSL_CTX_set_verify(prog->prog_ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);  
     SSL_CTX_set_default_verify_paths(prog->prog_ssl_ctx);
+
+    if (!SSL_CTX_load_verify_locations(prog->prog_ssl_ctx, "certs/ca-cert.crt", NULL)) {
+        LSQ_ERROR("Error loading ca certs");
+        return -1;
+    }
 
     /* This is obviously test code: the key is just an array of NUL bytes */
     memset(ticket_keys, 0, sizeof(ticket_keys));
