@@ -1,6 +1,6 @@
 /* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 /*
- * echo_server.c -- QUIC server that echoes back input line by line
+ * vpn_server.c -- QUIC server that echoes back input line by line
  */
 
 #include <assert.h>
@@ -32,7 +32,7 @@
 
 struct lsquic_conn_ctx;
 
-struct echo_server_ctx {
+struct vpn_server_ctx {
     TAILQ_HEAD(, lsquic_conn_ctx)   conn_ctxs;
     unsigned max_reqs;
     int n_conn;
@@ -44,14 +44,14 @@ struct echo_server_ctx {
 struct lsquic_conn_ctx {
     TAILQ_ENTRY(lsquic_conn_ctx)    next_connh;
     lsquic_conn_t       *conn;
-    struct echo_server_ctx   *server_ctx;
+    struct vpn_server_ctx   *server_ctx;
 };
 
 
 static lsquic_conn_ctx_t *
-echo_server_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
+vpn_server_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
 {
-    struct echo_server_ctx *server_ctx = stream_if_ctx;
+    struct vpn_server_ctx *server_ctx = stream_if_ctx;
     lsquic_conn_ctx_t *conn_h = calloc(1, sizeof(*conn_h));
     conn_h->conn = conn;
     conn_h->server_ctx = server_ctx;
@@ -63,7 +63,7 @@ echo_server_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
 
 
 static void
-echo_server_on_conn_closed (lsquic_conn_t *conn)
+vpn_server_on_conn_closed (lsquic_conn_t *conn)
 {
     lsquic_conn_ctx_t *conn_h = lsquic_conn_get_ctx(conn);
     if (conn_h->server_ctx->n_conn)
@@ -84,9 +84,9 @@ echo_server_on_conn_closed (lsquic_conn_t *conn)
 
 struct lsquic_stream_ctx {
     lsquic_stream_t     *stream;
-    struct echo_server_ctx   *server_ctx;
+    struct vpn_server_ctx   *server_ctx;
     struct event        *read_tun_ev;
-    char                 buf[0x100];
+    char                 buf[BUFF_SIZE];
     size_t               buf_off;
 };
 
@@ -94,22 +94,23 @@ static void tun_read_handler(int fd, short event, void *ctx){
     ssize_t              len;
     lsquic_stream_ctx_t *st_h = ctx;
 
-
-    LSQ_INFO("read from tun!");
-
-    len = tun_read(fd, st_h->buf + st_h->buf_off++, 1400);
+    len = tun_read(fd, st_h->buf, BUFF_SIZE);
     if (len <= 0) {
         perror("tun_read");
         return;
     }
 
-    LSQ_DEBUG("read newline: wantwrite");
+    st_h->buf_off = len;
+    LSQ_INFO("read from tun %zu bytes", len);
+
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->server_ctx->prog->prog_engine);
+
+    event_add(st_h->read_tun_ev, NULL);
 }
 
 static lsquic_stream_ctx_t *
-echo_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
+vpn_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
 {
     lsquic_stream_ctx_t *st_h = malloc(sizeof(*st_h));
     st_h->stream = stream;
@@ -126,7 +127,7 @@ echo_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
 
 
 static struct lsquic_conn_ctx *
-find_conn_h (const struct echo_server_ctx *server_ctx, lsquic_stream_t *stream)
+find_conn_h (const struct vpn_server_ctx *server_ctx, lsquic_stream_t *stream)
 {
     struct lsquic_conn_ctx *conn_h;
     lsquic_conn_t *conn;
@@ -140,40 +141,35 @@ find_conn_h (const struct echo_server_ctx *server_ctx, lsquic_stream_t *stream)
 
 
 static void
-echo_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
+vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
-    size_t nr;
+    size_t len;
 
-    nr = lsquic_stream_read(stream, st_h->buf + st_h->buf_off++, 1);
-    if (0 == nr)
+    len = lsquic_stream_read(stream, st_h->buf, BUFF_SIZE);
+    if (0 == len)
     {
         LSQ_NOTICE("EOF: closing connection");
         lsquic_stream_shutdown(stream, 2);
         conn_h = find_conn_h(st_h->server_ctx, stream);
         lsquic_conn_close(conn_h->conn);
     }
-    else if ('\n' == st_h->buf[ st_h->buf_off - 1 ])
-    {
-        /* Found end of line: echo it back */
-        lsquic_stream_wantwrite(stream, 1);
-        lsquic_stream_wantread(stream, 0);
+
+    st_h->buf_off = len;
+    LSQ_INFO("read from client channel %zu bytes", len);
+    
+    if (tun_write(st_h->server_ctx->vpn_ctx->tun_fd, st_h->buf, len) != len) {
+        LSQ_ERROR("tun_write ERROR");
+    }else{
+        LSQ_DEBUG("tun_write %zu bytes", len);
     }
-    else if (st_h->buf_off == sizeof(st_h->buf))
-    {
-        /* Out of buffer space: line too long */
-        LSQ_NOTICE("run out of buffer space");
-        lsquic_stream_shutdown(stream, 2);
-    }
-    else
-    {
-        /* Keep reading */;
-    }
+    
+    lsquic_stream_wantread(stream, 1);
 }
 
 
 static void
-echo_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
+vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
     st_h->buf_off = 0;
@@ -184,7 +180,7 @@ echo_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
 
 static void
-echo_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
+vpn_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
     LSQ_NOTICE("%s called", __func__);
@@ -195,12 +191,12 @@ echo_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
 
 const struct lsquic_stream_if server_echo_stream_if = {
-    .on_new_conn            = echo_server_on_new_conn,
-    .on_conn_closed         = echo_server_on_conn_closed,
-    .on_new_stream          = echo_server_on_new_stream,
-    .on_read                = echo_server_on_read,
-    .on_write               = echo_server_on_write,
-    .on_close               = echo_server_on_stream_close,
+    .on_new_conn            = vpn_server_on_new_conn,
+    .on_conn_closed         = vpn_server_on_conn_closed,
+    .on_new_stream          = vpn_server_on_new_stream,
+    .on_read                = vpn_server_on_read,
+    .on_write               = vpn_server_on_write,
+    .on_close               = vpn_server_on_stream_close,
 };
 
 
@@ -242,7 +238,7 @@ main (int argc, char **argv)
 {
     int opt, s;
     struct prog prog;
-    struct echo_server_ctx server_ctx;
+    struct vpn_server_ctx server_ctx;
     Context     context;
 
     memset(&server_ctx, 0, sizeof(server_ctx));

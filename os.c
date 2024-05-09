@@ -475,22 +475,17 @@ Cmds firewall_rules_cmds(int is_server)
     defined(__DragonFly__) || defined(__NetBSD__)
         static const char *set_cmds[] =
             { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up",
-              "ifconfig $IF_NAME inet6 $LOCAL_TUN_IP6 $REMOTE_TUN_IP6 prefixlen 128 up",
 #ifndef NO_DEFAULT_ROUTES
-              "route add $EXT_IP $EXT_GW_IP",
-              "route add 0/1 $REMOTE_TUN_IP",
-              "route add 128/1 $REMOTE_TUN_IP",
-              "route add -inet6 -blackhole 0000::/1 $REMOTE_TUN_IP6",
-              "route add -inet6 -blackhole 8000::/1 $REMOTE_TUN_IP6",
+              //"route add $EXT_IP $EXT_GW_IP",
+              //"route add 0/1 $REMOTE_TUN_IP",
+              //"route add 128/1 $REMOTE_TUN_IP",
 #endif
               NULL },
-                          *unset_cmds[] = {
+                          *unset_cmds[] = { NULL, 
 #ifndef NO_DEFAULT_ROUTES
-                              "route delete $EXT_IP",
-                              "route delete 0/1",
-                              "route delete 128/1",
-                              "route delete -inet6 0000::/1",
-                              "route delete -inet6 8000::/1",
+                              //"route delete $EXT_IP",
+                              //"route delete 0/1",
+                              //"route delete 128/1",
 #endif
                               NULL
                           };

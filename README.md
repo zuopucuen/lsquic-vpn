@@ -14,7 +14,7 @@ make
 3. Test 
 ```
 # server
-./echo_server -c www.example.com,./certs/server.crt,./certs/ca-key.pem  -s 0.0.0.0:4433 -L debug
+./vpn_server -c www.example.com,./certs/server.crt,./certs/ca-key.pem  -s 0.0.0.0:4433 -L debug
 
 output:
 09:59:07.173 [DEBUG] tokgen: TOKGEN2 does not exist: generate
@@ -33,10 +33,20 @@ output:
 
 
 # client
-./echo_client -H www.example.com  -s 127.0.0.1:4433
+./vpn_client -H www.example.com  -s 127.0.0.1:4433 -L info
 
 output:
-ls
-ls
-
+Interface: [utun4]
+18:03:05.991 [INFO] tokgen: inserted TOKGEN2 of size 110
+18:03:05.992 [INFO] engine: instantiated engine
+18:03:05.998 [INFO] socket buffer size: 786896 bytes; max # packets is set to 574
+18:03:05.999 [INFO] [QUIC:6D1EFA9C12A0302B] cubic: initialized
+18:03:06.000 [INFO] [QUIC:6D1EFA9C12A0302B] handshake: update handshake keys to version 6B3343CF
+18:03:06.000 [INFO] [QUIC:6D1EFA9C12A0302B] cubic: min_delay: 1109
+18:03:06.000 [INFO] [QUIC:6D1EFA9C12A0302B] cubic: CWND: 48180
+18:03:06.000 [INFO] [QUIC:6D1EFA9C12A0302B] sendctl: srtt is 1070 usec, which is smaller than or equal to the threshold of 1500 usec: select Cubic congestion controller
+18:03:06.001 [INFO] [QUIC:6D1EFA9C12A0302B] conn: applied peer transport parameters
+18:03:06.001 [INFO] [QUIC:6D1EFA9C12A0302B] cubic: min_delay: 301
+18:03:07.503 [INFO] [QUIC:6D1EFA9C12A0302B] alarmset: ring expired ACK_APP alarm
+18:03:08.504 [INFO] [QUIC:6D1EFA9C12A0302B] alarmset: ring expired ACK_APP alarm
 ```

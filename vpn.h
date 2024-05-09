@@ -70,6 +70,8 @@
 #define endian_swap64(x) (x)
 #endif
 
+#define BUFF_SIZE 4096
+
 typedef struct Context_ {
     const char *  wanted_if_name;
     const char *  local_tun_ip;

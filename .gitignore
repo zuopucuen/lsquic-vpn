@@ -62,3 +62,7 @@ CMakeCache.txt
 
 # Others
 .*
+vpn_client
+vpn_server
+http_server
+http_client

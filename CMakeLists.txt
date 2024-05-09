@@ -23,13 +23,13 @@ SET(LIBS lsquic crypto ssl event m z)
 
 add_executable(http_client http_client.c prog.c common.c cert.c)
 add_executable(http_server http_server.c prog.c common.c cert.c)
-add_executable(echo_server echo_server.c prog.c common.c cert.c os.c)
-add_executable(echo_client echo_client.c prog.c common.c cert.c os.c) 
+add_executable(vpn_server vpn_server.c prog.c common.c cert.c os.c)
+add_executable(vpn_client vpn_client.c prog.c common.c cert.c os.c) 
 
 TARGET_LINK_LIBRARIES(http_client ${LIBS})
 TARGET_LINK_LIBRARIES(http_server ${LIBS})
-TARGET_LINK_LIBRARIES(echo_server ${LIBS})
-TARGET_LINK_LIBRARIES(echo_client ${LIBS})
+TARGET_LINK_LIBRARIES(vpn_server ${LIBS})
+TARGET_LINK_LIBRARIES(vpn_client ${LIBS})
 
 INCLUDE(CheckFunctionExists)
 CHECK_FUNCTION_EXISTS(sendmmsg HAVE_SENDMMSG)
