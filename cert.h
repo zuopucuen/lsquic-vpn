@@ -1,6 +1,7 @@
 /* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 #ifndef TEST_CERT_H
 #define TEST_CERT_H
+#include <openssl/x509.h>
 
 struct lsquic_hash;
 struct ssl_ctx_st;
@@ -15,7 +16,8 @@ struct server_cert
 
 
 int
-load_cert (struct lsquic_hash *, const char *optarg);
+//load_cert (struct lsquic_hash *, const char *optarg);
+load_cert (struct lsquic_hash *certs, const char *optarg, const char *ca_file);
 
 struct ssl_ctx_st *
 lookup_cert (void *cert_lu_ctx, const struct sockaddr * /*unused */,

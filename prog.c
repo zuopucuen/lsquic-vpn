@@ -231,6 +231,17 @@ prog_print_common_options (const struct prog *prog, FILE *out)
     );
 }
 
+int set_cert_client(struct prog *prog, const char *arg)
+{
+    prog->cert_file = strdup(optarg);
+    prog->key_file = strchr(prog->cert_file, ',');
+    if (!prog->key_file)
+        return 1;
+    *(prog->key_file) = '\0';
+    ++(prog->key_file);
+
+    return 0;
+}
 
 int
 prog_set_opt (struct prog *prog, int opt, const char *arg)
@@ -275,14 +286,14 @@ prog_set_opt (struct prog *prog, int opt, const char *arg)
         prog->prog_settings.es_cc_algo = atoi(optarg);
         return 0;
     case 'c':
-        //if (prog->prog_engine_flags & LSENG_SERVER)
-        //{
-            if (!prog->prog_certs)
-                prog->prog_certs = lsquic_hash_create();
-            return load_cert(prog->prog_certs, arg);
-        //}
-        //else
-        //    return -1;
+        if (prog->prog_engine_flags & LSENG_SERVER){
+            prog->certs_optarg = arg;
+            return 0;
+        }
+        return set_cert_client(prog, arg);
+    case 'C':
+        prog->ca_file = arg;
+        return 0;
     case 'H':
         if (prog->prog_engine_flags & LSENG_SERVER)
             return -1;
@@ -485,6 +496,30 @@ prog_new_session_cb (SSL *ssl, SSL_SESSION *session)
     return 0;
 }
 
+int verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx) {
+    X509 *cert;
+    char data[256];
+
+    // 如果OpenSSL的预验证失败，直接返回失败
+    if (!preverify_ok) {
+        int err = X509_STORE_CTX_get_error(x509_ctx);
+        LSQ_EMERG("OpenSSL pre-verification error: %s\n", X509_verify_cert_error_string(err));
+        return 1;
+    }
+
+    // 获取当前验证的证书
+    cert = X509_STORE_CTX_get_current_cert(x509_ctx);
+    if (!cert) return 0;  // 无法获取证书，验证失败
+
+    // 获取证书中的公用名 (CN)
+    X509_NAME_get_text_by_NID(X509_get_subject_name(cert), NID_commonName, data, 256);
+    LSQ_INFO("NID_commonName: %s", data);
+
+    // 如果需要，可以增加更多的检查，如检查组织名、过期时间等
+
+    return 1;  // 所有检查都通过，验证成功
+}
+
 static int
 prog_init_ssl_ctx (struct prog *prog)
 {
@@ -503,12 +538,37 @@ prog_init_ssl_ctx (struct prog *prog)
     // 双向验证
     // SSL_VERIFY_PEER---要求对证书进行认证，没有证书也会放行
     // SSL_VERIFY_FAIL_IF_NO_PEER_CERT---要求客户端需要提供证书，但验证发现单独使用没有证书也会放行
-    SSL_CTX_set_verify(prog->prog_ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);  
+    SSL_CTX_set_verify(prog->prog_ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);  
 
     // 设置信任根证书
-    if (!SSL_CTX_load_verify_locations(prog->prog_ssl_ctx, "certs/ca-cert.crt", NULL)) {
-        LSQ_ERROR("Error loading ca certs");
-        return -1;
+
+    if(prog->ca_file) {
+        if (!SSL_CTX_load_verify_locations(prog->prog_ssl_ctx, prog->ca_file, NULL)) {
+            LSQ_ERROR("Error loading ca certs");
+            return -1;
+        }
+    }
+
+
+    LSQ_INFO("ca-file: %s, cert_file: %s, key_file: %s", prog->ca_file, prog->cert_file, prog->key_file);
+
+    if(prog->cert_file) {
+        if (SSL_CTX_use_certificate_file(prog->prog_ssl_ctx, prog->cert_file, SSL_FILETYPE_PEM) <= 0) {
+            LSQ_EMERG("Error loading client/server ca certs");
+            return -1;
+        }
+    }
+
+    if(prog->key_file) {
+        if (SSL_CTX_use_PrivateKey_file(prog->prog_ssl_ctx, prog->key_file, SSL_FILETYPE_PEM) <= 0) {
+            LSQ_EMERG("Error loading client/server ca key");
+            return -1;
+        }
+
+        if (!SSL_CTX_check_private_key(prog->prog_ssl_ctx)) {
+            LSQ_EMERG("check private key faile");
+            return -1;
+        }
     }
 
     SSL_CTX_set_default_verify_paths(prog->prog_ssl_ctx);
@@ -725,8 +785,13 @@ no_cert (void *cert_lu_ctx, const struct sockaddr *sa_UNUSED, const char *sni)
 int
 prog_prep (struct prog *prog)
 {
-    int s;
+    int s, ret;
     char err_buf[100];
+
+    if (prog->prog_engine_flags & LSENG_SERVER && !prog->prog_certs){
+        prog->prog_certs = lsquic_hash_create();
+        ret = load_cert(prog->prog_certs, prog->certs_optarg, prog->ca_file);
+    }
 
     if (s_keylog_dir && prog->prog_certs)
     {

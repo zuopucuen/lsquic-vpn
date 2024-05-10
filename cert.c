@@ -60,7 +60,7 @@ select_alpn (SSL *ssl, const unsigned char **out, unsigned char *outlen,
 
 
 int
-load_cert (struct lsquic_hash *certs, const char *optarg)
+load_cert (struct lsquic_hash *certs, const char *optarg, const char *ca_file)
 {
     int rv = -1;
     char *sni, *cert_file, *key_file;
@@ -91,7 +91,20 @@ load_cert (struct lsquic_hash *certs, const char *optarg)
     }
     SSL_CTX_set_min_proto_version(cert->ce_ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(cert->ce_ssl_ctx, TLS1_3_VERSION);
+    SSL_CTX_set_verify(cert->ce_ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+
+/*
+    if(ca_file) {
+        LSQ_INFO("load cert load cafile: %s", ca_file);
+        if (!SSL_CTX_load_verify_locations(cert->ce_ssl_ctx, ca_file, NULL)) {
+            LSQ_ERROR("Error loading ca certs");
+            return -1;
+        }
+    }
+    */  
+
     SSL_CTX_set_default_verify_paths(cert->ce_ssl_ctx);
+
     SSL_CTX_set_alpn_select_cb(cert->ce_ssl_ctx, select_alpn, NULL);
     {
         const char *const s = getenv("LSQUIC_ENABLE_EARLY_DATA");

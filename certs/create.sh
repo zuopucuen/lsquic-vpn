@@ -1,6 +1,6 @@
 #!/bin/bash
 # 1.生成私钥
-#openssl genrsa -out ca-key.pem 2048 # 若不想变更已有的私钥，需注释掉此命令
+openssl genrsa -out ca-key.pem 2048 # 若不想变更已有的私钥，需注释掉此命令
 
 # 2.生成 server CSR
 openssl req -new -key ca-key.pem -out server.csr -config conf/server-openssl.conf
