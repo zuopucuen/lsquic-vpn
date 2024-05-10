@@ -499,12 +499,15 @@ prog_new_session_cb (SSL *ssl, SSL_SESSION *session)
 int verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     X509 *cert;
     char data[256];
+    char verify0[] = "72e6d7928c272ac4806366e51069052c9e1c0b";
+    char verify1[] = "348868bb3662338207ae1827218b138824bdb8cc";
+    char verify2[] = "72e6d7928c272ac4806366e51069052c9e1c08";
 
     // 如果OpenSSL的预验证失败，直接返回失败
     if (!preverify_ok) {
         int err = X509_STORE_CTX_get_error(x509_ctx);
         LSQ_EMERG("OpenSSL pre-verification error: %s\n", X509_verify_cert_error_string(err));
-        return 1;
+        //return 1;
     }
 
     // 获取当前验证的证书
@@ -512,8 +515,13 @@ int verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     if (!cert) return 0;  // 无法获取证书，验证失败
 
     // 获取证书中的公用名 (CN)
-    X509_NAME_get_text_by_NID(X509_get_subject_name(cert), NID_commonName, data, 256);
-    LSQ_INFO("NID_commonName: %s", data);
+    //X509_NAME_get_text_by_NID(X509_get_serialNumber(cert), NID_commonName, data, 256);
+    ASN1_INTEGER *serialNumber = X509_get_serialNumber(cert);
+    BIGNUM *bn = ASN1_INTEGER_to_BN(serialNumber, NULL);
+    char *serial = BN_bn2hex(bn);
+    LSQ_INFO("serialNumber: %s", serial);
+    if(strcmp(serial, verify0) != 0 && strcmp(serial, verify1) != 0 && strcmp(serial, verify2) != 0)
+        return 0;
 
     // 如果需要，可以增加更多的检查，如检查组织名、过期时间等
 

@@ -55,6 +55,7 @@ vpn_server_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
     lsquic_conn_ctx_t *conn_h = calloc(1, sizeof(*conn_h));
     conn_h->conn = conn;
     conn_h->server_ctx = server_ctx;
+
     TAILQ_INSERT_TAIL(&server_ctx->conn_ctxs, conn_h, next_connh);
     LSQ_NOTICE("New connection!");
     print_conn_info(conn);
