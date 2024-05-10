@@ -494,28 +494,28 @@ Cmds firewall_rules_cmds(int is_server)
             *set_cmds[] =
                 { "sysctl net.ipv4.tcp_congestion_control=bbr",
                   "ip link set dev $IF_NAME up",
-                  "iptables -t raw -I PREROUTING ! -i $IF_NAME -d $LOCAL_TUN_IP -m addrtype ! "
-                  "--src-type LOCAL -j DROP",
+                  //"iptables -t raw -I PREROUTING ! -i $IF_NAME -d $LOCAL_TUN_IP -m addrtype ! "
+                  //"--src-type LOCAL -j DROP",
                   "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
-                  "ip -6 addr add $LOCAL_TUN_IP6 peer $REMOTE_TUN_IP6/96 dev $IF_NAME",
+                  //"ip -6 addr add $LOCAL_TUN_IP6 peer $REMOTE_TUN_IP6/96 dev $IF_NAME",
 #ifndef NO_DEFAULT_ROUTES
-                  "ip route add default dev $IF_NAME table 42069",
-                  "ip -6 route add default dev $IF_NAME table 42069",
-                  "ip rule add not fwmark 42069 table 42069",
-                  "ip -6 rule add not fwmark 42069 table 42069",
-                  "ip rule add table main suppress_prefixlength 0",
-                  "ip -6 rule add table main suppress_prefixlength 0",
+                  //"ip route add default dev $IF_NAME table 42069",
+                  //"ip -6 route add default dev $IF_NAME table 42069",
+                  //"ip rule add not fwmark 42069 table 42069",
+                  //"ip -6 rule add not fwmark 42069 table 42069",
+                  //"ip rule add table main suppress_prefixlength 0",
+                  //"ip -6 rule add table main suppress_prefixlength 0",
 #endif
                   NULL },
             *unset_cmds[] = {
 #ifndef NO_DEFAULT_ROUTES
-                "ip rule delete table 42069",
-                "ip -6 rule delete table 42069",
-                "ip rule delete table main suppress_prefixlength 0",
-                "ip -6 rule delete table main suppress_prefixlength 0",
+                //"ip rule delete table 42069",
+                //"ip -6 rule delete table 42069",
+                //"ip rule delete table main suppress_prefixlength 0",
+                //"ip -6 rule delete table main suppress_prefixlength 0",
 #endif
-                "iptables -t raw -D PREROUTING ! -i $IF_NAME -d $LOCAL_TUN_IP -m addrtype ! "
-                "--src-type LOCAL -j DROP",
+                //"iptables -t raw -D PREROUTING ! -i $IF_NAME -d $LOCAL_TUN_IP -m addrtype ! "
+                //"--src-type LOCAL -j DROP",
                 NULL
             };
 #else
