@@ -17,7 +17,10 @@ struct server_cert
 
 int
 //load_cert (struct lsquic_hash *, const char *optarg);
-load_cert (struct lsquic_hash *certs, const char *optarg, const char *ca_file);
+load_cert (struct lsquic_hash *certs, const char *ca_file, const char *cert_file, const char *key_file);
+
+int
+set_cert(SSL_CTX  *ssl_ctx, const char *ca_file, const char *cert_file, const char *key_file);
 
 struct ssl_ctx_st *
 lookup_cert (void *cert_lu_ctx, const struct sockaddr * /*unused */,

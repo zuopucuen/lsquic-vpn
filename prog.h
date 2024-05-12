@@ -46,8 +46,8 @@ struct prog
     const char                     *prog_hostname;
     const char                     *certs_optarg;
     const char                     *ca_file;
-    char                           *cert_file;
-    char                           *key_file;
+    const char                     *cert_file;
+    const char                     *key_file;
     int                             prog_ipver;     /* 0, 4, or 6 */
     enum {
         PROG_FLAG_COOLDOWN  = 1 << 0,
@@ -78,7 +78,7 @@ prog_init (struct prog *, unsigned lsquic_engine_flags, struct sport_head *,
 #   define IP_DONTFRAG_FLAG ""
 #endif
 
-#define PROG_OPTS "i:km:c:C:y:L:l:o:H:s:S:Y:z:G:WA:" RECVMMSG_FLAG SENDMMSG_FLAG \
+#define PROG_OPTS "i:k:m:c:C:y:L:l:o:H:s:S:Y:z:G:WA:" RECVMMSG_FLAG SENDMMSG_FLAG \
                                                             IP_DONTFRAG_FLAG
 
 /* Returns:
