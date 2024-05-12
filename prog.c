@@ -1,10 +1,8 @@
 /* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 #include <assert.h>
-#ifndef WIN32
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <signal.h>
-#endif
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -13,20 +11,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/queue.h>
-#ifndef WIN32
 #include <unistd.h>
-#else
-#include "vc_compat.h"
-#include "getopt.h"
-#pragma warning(disable:4028)
-#endif// WIN32
 
 #include <event2/event.h>
-
-#include <lsquic.h>
-
 #include <openssl/ssl.h>
 
+#include <lsquic.h>
 #include <lsquic_hash.h>
 #include <lsquic_int_types.h>
 #include <lsquic_util.h>
@@ -56,15 +46,6 @@ prog_init (struct prog *prog, unsigned flags,
            struct sport_head *sports,
            const struct lsquic_stream_if *stream_if, void *stream_if_ctx)
 {
-#ifdef WIN32
-    WSADATA wsd;
-    int s = WSAStartup(MAKEWORD(2, 2), &wsd);
-    if (s != 0)
-    {
-        LSQ_ERROR("WSAStartup failed: %d", s);
-        return -1;
-    }
-#endif
     /* prog-specific initialization: */
     memset(prog, 0, sizeof(*prog));
     prog->prog_engine_flags = flags;
@@ -246,10 +227,8 @@ int set_cert_client(struct prog *prog, const char *arg)
 int
 prog_set_opt (struct prog *prog, int opt, const char *arg)
 {
-#ifndef WIN32
     struct stat st;
     int s;
-#endif
 
     switch (opt)
     {
@@ -363,7 +342,6 @@ prog_set_opt (struct prog *prog, int opt, const char *arg)
         s_sess_resume_file = optarg;
         return 0;
     case 'G':
-#ifndef WIN32
         if (0 == stat(optarg, &st))
         {
             if (!S_ISDIR(st.st_mode))
@@ -390,10 +368,6 @@ prog_set_opt (struct prog *prog, int opt, const char *arg)
             prog->prog_settings.es_ql_bits = 0;
         }
         return 0;
-#else
-        LSQ_ERROR("key logging is not supported on Windows");
-        return -1;
-#endif
     default:
         return 1;
     }
@@ -499,8 +473,8 @@ prog_new_session_cb (SSL *ssl, SSL_SESSION *session)
 int verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     X509 *cert;
     char data[256];
-    char verify0[] = "72e6d7928c272ac4806366e51069052c9e1c0b";
-    char verify1[] = "348868bb3662338207ae1827218b138824bdb8cc";
+    char verify0[] = "72e6d7928c272ac4806366e51069052c9e1c0a";
+    char verify1[] = "203cc81cb7938accbfb9c4ca50faab5d9dc996e1";
     char verify2[] = "72e6d7928c272ac4806366e51069052c9e1c08";
 
     // 如果OpenSSL的预验证失败，直接返回失败
@@ -678,14 +652,12 @@ prog_usr2_handler (int fd, short what, void *arg)
 int
 prog_run (struct prog *prog)
 {
-#ifndef WIN32
     prog->prog_usr1 = evsignal_new(prog->prog_eb, SIGUSR1,
                                                     prog_usr1_handler, prog);
     evsignal_add(prog->prog_usr1, NULL);
     prog->prog_usr2 = evsignal_new(prog->prog_eb, SIGUSR2,
                                                     prog_usr2_handler, prog);
     evsignal_add(prog->prog_usr2, NULL);
-#endif
 
     event_base_loop(prog->prog_eb, 0);
 

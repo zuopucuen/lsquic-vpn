@@ -12,18 +12,9 @@
 #include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
-#ifndef WIN32
 #include <fcntl.h>
 #include <unistd.h>
 #define Read read
-#else
-#include "vc_compat.h"
-#include "getopt.h"
-#include <io.h>
-#define Read _read
-#define STDIN_FILENO 0
-#endif
 
 #include <event2/event.h>
 

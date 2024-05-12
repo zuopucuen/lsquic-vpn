@@ -64,5 +64,4 @@ CMakeCache.txt
 .*
 vpn_client
 vpn_server
-http_server
-http_client
+Makefile

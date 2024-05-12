@@ -10,13 +10,8 @@
 #include <string.h>
 #include <sys/queue.h>
 #include <time.h>
-#ifndef WIN32
 #include <unistd.h>
 #include <netinet/in.h>
-#else
-#include "vc_compat.h"
-#include "getopt.h"
-#endif
 
 #include <event2/event.h>
 
