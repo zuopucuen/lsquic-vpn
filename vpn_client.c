@@ -32,7 +32,7 @@ struct lsquic_conn_ctx;
 struct vpn_client_ctx {
     struct lsquic_conn_ctx  *conn_h;
     struct prog                 *prog;
-    Context  *vpn_ctx;
+    vpn_t  *vpn_ctx;
 };
 
 struct lsquic_conn_ctx {
@@ -196,66 +196,11 @@ main (int argc, char **argv)
     struct sport_head sports;
     struct prog prog;
     struct vpn_client_ctx client_ctx;
-    Context     context;
-
-    memset(&context, 0, sizeof context);
-    context.is_server = 0;
-    context.server_ip_or_name  = "auto";
-    context.server_port    = "auto";
-    context.wanted_if_name = "";
-    context.local_tun_ip = DEFAULT_CLIENT_IP;
-    context.remote_tun_ip = DEFAULT_SERVER_IP;
-    context.wanted_ext_gw_ip = "auto";
-
-    if ((context.ext_if_name = get_default_ext_if_name()) == NULL && context.is_server) {
-        fprintf(stderr, "Unable to automatically determine the external interface\n");
-        return 1;
-    }
-    context.tun_fd = tun_create(context.if_name, context.wanted_if_name);
-    
-    if (context.tun_fd == -1) {
-        perror("tun device creation");
-        return 1;
-    }
-
-    printf("Interface: [%s]\n", context.if_name);
-    if (tun_set_mtu(context.if_name, DEFAULT_MTU) != 0) {
-        perror("mtu");
-    }
-
-    #ifdef __OpenBSD__
-    pledge("stdio proc exec dns inet", NULL);
-    #endif
-    context.firewall_rules_set = -1;
-    /*
-    if (context.server_ip_or_name != NULL &&
-        resolve_ip(context.server_ip, sizeof context.server_ip, context.server_ip_or_name) != 0) {
-        firewall_rules(&context, 0, 1);
-        return 1;
-    }
-    */
-    if (context.is_server) {
-        if (firewall_rules(&context, 1, 0) != 0) {
-            return -1;
-        }
-#ifdef __OpenBSD__
-        printf("\nAdd the following rule to /etc/pf.conf:\npass out from %s nat-to egress\n\n",
-               context.remote_tun_ip);
-#endif
-    } else {
-        firewall_rules(&context, 1, 1);
-    }
-
-
-#ifdef WIN32
-    fprintf(stderr, "%s does not work on Windows, see\n"
-        "https://github.com/litespeedtech/lsquic/issues/219\n", argv[0]);
-    exit(EXIT_FAILURE);
-#endif
+    vpn_t     vpn;
 
     memset(&client_ctx, 0, sizeof(client_ctx));
     client_ctx.prog = &prog;
-    client_ctx.vpn_ctx = &context;
+    client_ctx.vpn_ctx = &vpn;
 
     TAILQ_INIT(&sports);
     prog_init(&prog, 0, &sports, &client_echo_stream_if, &client_ctx);
@@ -274,7 +219,11 @@ main (int argc, char **argv)
         }
     }
 
-#ifndef WIN32
+    if(vpn_init(&vpn, IS_CLIENT) <= 0){ 
+        LSQ_ERROR("vpn init error");
+        exit(EXIT_FAILURE);
+    } 
+
     int flags = fcntl(STDIN_FILENO, F_GETFL);
     flags |= O_NONBLOCK;
     if (0 != fcntl(STDIN_FILENO, F_SETFL, flags))
@@ -282,12 +231,6 @@ main (int argc, char **argv)
         perror("fcntl");
         exit(1);
     }
-#else
-    {
-        u_long on = 1;
-        ioctlsocket(STDIN_FILENO, FIONBIO, &on);
-    }
-#endif
 
     if (0 != prog_prep(&prog))
     {

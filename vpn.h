@@ -71,8 +71,10 @@
 #endif
 
 #define BUFF_SIZE 4096
+#define IS_CLIENT 0
+#define IS_SERVER 1
 
-typedef struct Context_ {
+typedef struct vpn_s {
     const char *  wanted_if_name;
     const char *  local_tun_ip;
     const char *  remote_tun_ip;
@@ -95,8 +97,9 @@ typedef struct Context_ {
     struct pollfd fds[3];
     uint32_t      uc_kx_st[12];
     uint32_t      uc_st[2][12];
-} Context;
+} vpn_t;
 
+int vpn_init(vpn_t *vpn, int server_flag);
 extern volatile sig_atomic_t exit_signal_received;
 
 #endif

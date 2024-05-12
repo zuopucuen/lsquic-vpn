@@ -33,7 +33,7 @@ struct vpn_server_ctx {
     int n_conn;
     struct sport_head sports;
     struct prog *prog;
-    Context *vpn_ctx;
+    vpn_t *vpn_ctx;
 };
 
 struct lsquic_conn_ctx {
@@ -96,13 +96,12 @@ static void tun_read_handler(int fd, short event, void *ctx){
         return;
     }
 
+    event_add(st_h->read_tun_ev, NULL);
     st_h->buf_off = len;
     LSQ_INFO("read from tun %zu bytes", len);
 
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->server_ctx->prog->prog_engine);
-
-    event_add(st_h->read_tun_ev, NULL);
 }
 
 static lsquic_stream_ctx_t *
@@ -112,15 +111,17 @@ vpn_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     st_h->stream = stream;
     st_h->server_ctx = stream_if_ctx;
     st_h->buf_off = 0;
-    lsquic_stream_wantread(stream, 1);
+
+    LSQ_INFO("new steam");
 
     st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
                                    st_h->server_ctx->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
     event_add(st_h->read_tun_ev, NULL);
 
+    lsquic_stream_wantread(stream, 1);
+
     return st_h;
 }
-
 
 static struct lsquic_conn_ctx *
 find_conn_h (const struct vpn_server_ctx *server_ctx, lsquic_stream_t *stream)
@@ -149,25 +150,38 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         lsquic_stream_shutdown(stream, 2);
         conn_h = find_conn_h(st_h->server_ctx, stream);
         lsquic_conn_close(conn_h->conn);
-    }
-
-    st_h->buf_off = len;
-    LSQ_INFO("read from client channel %zu bytes", len);
-    
-    if (tun_write(st_h->server_ctx->vpn_ctx->tun_fd, st_h->buf, len) != len) {
-        LSQ_ERROR("tun_write ERROR");
     }else{
-        LSQ_DEBUG("tun_write %zu bytes", len);
-    }
+        st_h->buf_off = len;
+        LSQ_INFO("read from client channel %zu bytes", len);
     
-    lsquic_stream_wantread(stream, 1);
+        if (tun_write(st_h->server_ctx->vpn_ctx->tun_fd, st_h->buf, len) != len) {
+            LSQ_ERROR("tun_write ERROR");
+        }else{
+            LSQ_DEBUG("tun_write %zu bytes", len);
+        }
+    
+        lsquic_stream_wantread(stream, 1);
+    }
 }
 
 
 static void
 vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
-    lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
+    struct lsquic_conn_ctx *conn_h;
+    ssize_t len;
+
+    len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
+    if (0 == len)
+    {
+        LSQ_NOTICE("write error: closing connection");
+        lsquic_stream_shutdown(stream, 2);
+        conn_h = find_conn_h(st_h->server_ctx, stream);
+        lsquic_conn_close(conn_h->conn);
+        //event_del(st_h->read_tun_ev);
+        return;
+    }
+
     st_h->buf_off = 0;
     lsquic_stream_flush(stream);
     lsquic_stream_wantwrite(stream, 0);
@@ -179,6 +193,7 @@ static void
 vpn_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
+
     LSQ_NOTICE("%s called", __func__);
     conn_h = find_conn_h(st_h->server_ctx, stream);
     LSQ_WARN("%s: TODO: free connection handler %p", __func__, conn_h);
@@ -209,37 +224,17 @@ usage (const char *prog)
                 , prog);
 }
 
-static int resolve_ip(char *ip, size_t sizeof_ip, const char *ip_or_name)
-{
-    struct addrinfo hints, *res;
-    int             eai;
-
-    memset(&hints, 0, sizeof hints);
-    hints.ai_flags    = 0;
-    hints.ai_family   = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_addr     = NULL;
-    if ((eai = getaddrinfo(ip_or_name, NULL, &hints, &res)) != 0 ||
-        (res->ai_family != AF_INET && res->ai_family != AF_INET6) ||
-        (eai = getnameinfo(res->ai_addr, res->ai_addrlen, ip, (socklen_t) sizeof_ip, NULL, 0,
-                           NI_NUMERICHOST | NI_NUMERICSERV)) != 0) {
-        fprintf(stderr, "Unable to resolve [%s]: [%s]\n", ip_or_name, gai_strerror(eai));
-        return -1;
-    }
-    return 0;
-}
-
 int
 main (int argc, char **argv)
 {
     int opt, s;
     struct prog prog;
     struct vpn_server_ctx server_ctx;
-    Context     context;
+    vpn_t     vpn;
 
     memset(&server_ctx, 0, sizeof(server_ctx));
     server_ctx.prog = &prog;
-    server_ctx.vpn_ctx= &context;
+    server_ctx.vpn_ctx= &vpn;
     TAILQ_INIT(&server_ctx.sports);
     TAILQ_INIT(&server_ctx.conn_ctxs);
 
@@ -262,6 +257,11 @@ main (int argc, char **argv)
         }
     }
 
+    if(vpn_init(&vpn, IS_SERVER) <= 0){ 
+        LSQ_ERROR("vpn init error");
+        exit(EXIT_FAILURE);
+    } 
+
     add_alpn("echo");
     if (0 != prog_prep(&prog))
     {
@@ -270,54 +270,6 @@ main (int argc, char **argv)
     }
 
     LSQ_DEBUG("entering event loop");
-
-    memset(&context, 0, sizeof(context));
-    context.is_server = 1;
-    context.server_ip_or_name  = "auto";
-    context.server_port    = "auto";
-    context.wanted_if_name = "";
-    context.local_tun_ip = DEFAULT_SERVER_IP;
-    context.remote_tun_ip = DEFAULT_CLIENT_IP;
-    context.wanted_ext_gw_ip = "auto";
-
-    if ((context.ext_if_name = get_default_ext_if_name()) == NULL && context.is_server) {
-        fprintf(stderr, "Unable to automatically determine the external interface\n");
-        return 1;
-    }
-    context.tun_fd = tun_create(context.if_name, context.wanted_if_name);
-    
-    if (context.tun_fd == -1) {
-        perror("tun device creation");
-        return 1;
-    }
-
-    printf("Interface: [%s]\n", context.if_name);
-    if (tun_set_mtu(context.if_name, DEFAULT_MTU) != 0) {
-        perror("mtu");
-    }
-
-    #ifdef __OpenBSD__
-    pledge("stdio proc exec dns inet", NULL);
-#endif
-    context.firewall_rules_set = -1;
-    /*
-    if (context.server_ip_or_name != NULL &&
-        resolve_ip(context.server_ip, sizeof context.server_ip, context.server_ip_or_name) != 0) {
-        firewall_rules(&context, 0, 1);
-        return 1;
-    }
-    */
-    if (context.is_server) {
-        if (firewall_rules(&context, 1, 0) != 0) {
-            return -1;
-        }
-#ifdef __OpenBSD__
-        printf("\nAdd the following rule to /etc/pf.conf:\npass out from %s nat-to egress\n\n",
-               context.remote_tun_ip);
-#endif
-    } else {
-        firewall_rules(&context, 0, 1);
-    }
 
     s = prog_run(&prog);
     prog_cleanup(&prog);

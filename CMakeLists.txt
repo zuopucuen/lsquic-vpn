@@ -21,8 +21,8 @@ endif(APPLE)
 
 SET(LIBS lsquic crypto ssl event m z)
 
-add_executable(vpn_server vpn_server.c prog.c common.c cert.c os.c)
-add_executable(vpn_client vpn_client.c prog.c common.c cert.c os.c) 
+add_executable(vpn_server vpn_server.c prog.c common.c cert.c os.c vpn.c)
+add_executable(vpn_client vpn_client.c prog.c common.c cert.c os.c vpn.c) 
 
 TARGET_LINK_LIBRARIES(vpn_server ${LIBS})
 TARGET_LINK_LIBRARIES(vpn_client ${LIBS})

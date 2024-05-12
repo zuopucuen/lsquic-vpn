@@ -525,26 +525,26 @@ Cmds firewall_rules_cmds(int is_server)
     }
 }
 
-int firewall_rules(Context *context, int set, int silent)
+int firewall_rules(vpn_t *vpn, int set, int silent)
 {
-    const char *       substs[][2] = { { "$LOCAL_TUN_IP6", context->local_tun_ip6 },
-                                { "$REMOTE_TUN_IP6", context->remote_tun_ip6 },
-                                { "$LOCAL_TUN_IP", context->local_tun_ip },
-                                { "$REMOTE_TUN_IP", context->remote_tun_ip },
-                                { "$EXT_IP", context->server_ip },
-                                { "$EXT_PORT", context->server_port },
-                                { "$EXT_IF_NAME", context->ext_if_name },
-                                { "$EXT_GW_IP", context->ext_gw_ip },
-                                { "$IF_NAME", context->if_name },
+    const char *       substs[][2] = { { "$LOCAL_TUN_IP6", vpn->local_tun_ip6 },
+                                { "$REMOTE_TUN_IP6", vpn->remote_tun_ip6 },
+                                { "$LOCAL_TUN_IP", vpn->local_tun_ip },
+                                { "$REMOTE_TUN_IP", vpn->remote_tun_ip },
+                                { "$EXT_IP", vpn->server_ip },
+                                { "$EXT_PORT", vpn->server_port },
+                                { "$EXT_IF_NAME", vpn->ext_if_name },
+                                { "$EXT_GW_IP", vpn->ext_gw_ip },
+                                { "$IF_NAME", vpn->if_name },
                                 { NULL, NULL } };
     const char *const *cmds;
     size_t             i;
 
-    if (context->firewall_rules_set == set) {
+    if (vpn->firewall_rules_set == set) {
         return 0;
     }
-    if ((cmds = (set ? firewall_rules_cmds(context->is_server).set
-                     : firewall_rules_cmds(context->is_server).unset)) == NULL) {
+    if ((cmds = (set ? firewall_rules_cmds(vpn->is_server).set
+                     : firewall_rules_cmds(vpn->is_server).unset)) == NULL) {
         fprintf(stderr,
                 "Routing commands for that operating system have not been "
                 "added yet.\n");
@@ -556,6 +556,6 @@ int firewall_rules(Context *context, int set, int silent)
             return -1;
         }
     }
-    context->firewall_rules_set = set;
+    vpn->firewall_rules_set = set;
     return 0;
 }
