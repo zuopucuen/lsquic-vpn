@@ -29,11 +29,10 @@ struct lsquic_conn_ctx;
 
 struct vpn_server_ctx {
     TAILQ_HEAD(, lsquic_conn_ctx)   conn_ctxs;
-    unsigned max_reqs;
     int n_conn;
     struct sport_head sports;
     struct prog *prog;
-    vpn_t *vpn_ctx;
+    vpn_t *vpn;
 };
 
 struct lsquic_conn_ctx {
@@ -41,7 +40,6 @@ struct lsquic_conn_ctx {
     lsquic_conn_t       *conn;
     struct vpn_server_ctx   *server_ctx;
 };
-
 
 static lsquic_conn_ctx_t *
 vpn_server_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
@@ -81,6 +79,7 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
 struct lsquic_stream_ctx {
     lsquic_stream_t     *stream;
     struct vpn_server_ctx   *server_ctx;
+    struct vpn_ctx_t        *vpn_ctx;
     struct event        *read_tun_ev;
     char                 buf[BUFF_SIZE];
     size_t               buf_off;
@@ -95,13 +94,13 @@ static void tun_read_handler(int fd, short event, void *ctx){
         perror("tun_read");
         return;
     }
-
-    event_add(st_h->read_tun_ev, NULL);
     st_h->buf_off = len;
     LSQ_INFO("read from tun %zu bytes", len);
 
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->server_ctx->prog->prog_engine);
+
+    event_add(st_h->read_tun_ev, NULL);
 }
 
 static lsquic_stream_ctx_t *
@@ -115,7 +114,7 @@ vpn_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     LSQ_INFO("new steam");
 
     st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
-                                   st_h->server_ctx->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+                                   st_h->server_ctx->vpn->tun_fd, EV_READ, tun_read_handler, st_h);
     event_add(st_h->read_tun_ev, NULL);
 
     lsquic_stream_wantread(stream, 1);
@@ -154,7 +153,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         st_h->buf_off = len;
         LSQ_INFO("read from client channel %zu bytes", len);
     
-        if (tun_write(st_h->server_ctx->vpn_ctx->tun_fd, st_h->buf, len) != len) {
+        if (tun_write(st_h->server_ctx->vpn->tun_fd, st_h->buf, len) != len) {
             LSQ_ERROR("tun_write ERROR");
         }else{
             LSQ_DEBUG("tun_write %zu bytes", len);
@@ -164,7 +163,6 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 }
 
-
 static void
 vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
@@ -172,16 +170,6 @@ vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     ssize_t len;
 
     len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
-    if (0 == len)
-    {
-        LSQ_NOTICE("write error: closing connection");
-        lsquic_stream_shutdown(stream, 2);
-        conn_h = find_conn_h(st_h->server_ctx, stream);
-        lsquic_conn_close(conn_h->conn);
-        //event_del(st_h->read_tun_ev);
-        return;
-    }
-
     st_h->buf_off = 0;
     lsquic_stream_flush(stream);
     lsquic_stream_wantwrite(stream, 0);
@@ -193,7 +181,7 @@ static void
 vpn_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
-
+    event_del(st_h->read_tun_ev);
     LSQ_NOTICE("%s called", __func__);
     conn_h = find_conn_h(st_h->server_ctx, stream);
     LSQ_WARN("%s: TODO: free connection handler %p", __func__, conn_h);
@@ -234,7 +222,7 @@ main (int argc, char **argv)
 
     memset(&server_ctx, 0, sizeof(server_ctx));
     server_ctx.prog = &prog;
-    server_ctx.vpn_ctx= &vpn;
+    server_ctx.vpn= &vpn;
     TAILQ_INIT(&server_ctx.sports);
     TAILQ_INIT(&server_ctx.conn_ctxs);
 

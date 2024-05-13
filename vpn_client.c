@@ -102,7 +102,6 @@ vpn_client_after_new_stream(lsquic_stream_ctx_t * st_h){
     st_h->buf_off = st_h->buf_off + sizeof(hello) + 1;
 
     lsquic_stream_wantwrite(st_h->stream, 1);
-    //lsquic_engine_process_conns(st_h->client_ctx->prog->prog_engine);
 }
 
 static lsquic_stream_ctx_t *

@@ -35,8 +35,8 @@ struct prog
     struct event_base              *prog_eb;
     struct event                   *prog_timer,
                                    *prog_send,
-                                   *prog_usr1;
-    struct event                   *prog_usr2;
+                                   *prog_sigint,
+                                   *prog_sigterm;
     struct ssl_ctx_st              *prog_ssl_ctx;
     struct lsquic_hash             *prog_certs;
     struct event                   *prog_event_sni;

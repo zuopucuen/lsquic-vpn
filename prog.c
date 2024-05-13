@@ -56,7 +56,7 @@ prog_init (struct prog *prog, unsigned flags,
 #else
     prog->prog_settings.es_ecn      = 0;
 #endif
-    prog->prog_settings.es_idle_timeout = 600;
+    prog->prog_settings.es_idle_timeout = 10;
 
     prog->prog_api.ea_settings      = &prog->prog_settings;
     prog->prog_api.ea_stream_if     = stream_if;
@@ -542,34 +542,29 @@ prog_timer_handler (int fd, short what, void *arg)
 
 
 static void
-prog_usr1_handler (int fd, short what, void *arg)
+prog_signal_handler (int fd, short what, void *arg)
 {
-    LSQ_NOTICE("Got SIGUSR1, stopping engine");
-    prog_stop(arg);
-}
+    LSQ_NOTICE("Got sigint, stopping engine");
 
-
-static void
-prog_usr2_handler (int fd, short what, void *arg)
-{
     struct prog *const prog = arg;
 
-    LSQ_NOTICE("Got SIGUSR2, cool down engine");
+    LSQ_NOTICE("Got sigterm, cool down engine");
     prog->prog_flags |= PROG_FLAG_COOLDOWN;
     lsquic_engine_cooldown(prog->prog_engine);
     prog_process_conns(prog);
+    prog_stop(prog);
 }
 
 
 int
 prog_run (struct prog *prog)
 {
-    prog->prog_usr1 = evsignal_new(prog->prog_eb, SIGUSR1,
-                                                    prog_usr1_handler, prog);
-    evsignal_add(prog->prog_usr1, NULL);
-    prog->prog_usr2 = evsignal_new(prog->prog_eb, SIGUSR2,
-                                                    prog_usr2_handler, prog);
-    evsignal_add(prog->prog_usr2, NULL);
+    prog->prog_sigint = evsignal_new(prog->prog_eb, SIGINT,
+                                                    prog_signal_handler, prog);
+    evsignal_add(prog->prog_sigint, NULL);
+    prog->prog_sigterm = evsignal_new(prog->prog_eb, SIGTERM,
+                                                    prog_signal_handler, prog);
+    evsignal_add(prog->prog_sigterm, NULL);
 
     event_base_loop(prog->prog_eb, 0);
 
@@ -611,17 +606,17 @@ prog_stop (struct prog *prog)
         event_free(prog->prog_timer);
         prog->prog_timer = NULL;
     }
-    if (prog->prog_usr1)
+    if (prog->prog_sigint)
     {
-        event_del(prog->prog_usr1);
-        event_free(prog->prog_usr1);
-        prog->prog_usr1 = NULL;
+        event_del(prog->prog_sigint);
+        event_free(prog->prog_sigint);
+        prog->prog_sigint = NULL;
     }
-    if (prog->prog_usr2)
+    if (prog->prog_sigterm)
     {
-        event_del(prog->prog_usr2);
-        event_free(prog->prog_usr2);
-        prog->prog_usr2 = NULL;
+        event_del(prog->prog_sigterm);
+        event_free(prog->prog_sigterm);
+        prog->prog_sigterm = NULL;
     }
 }
 
