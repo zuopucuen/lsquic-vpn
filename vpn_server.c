@@ -160,7 +160,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         LSQ_INFO("say Hello: %s", st_h->buf);
         addr_index = 0;
 
-        while(st_h->vpn_ctx->vpn->addrs[addr_index]->is_used == 1 && addr_index <= st_h->vpn_ctx->vpn->max_conn){
+        while(addr_index < st_h->vpn_ctx->vpn->max_conn && st_h->vpn_ctx->vpn->addrs[addr_index]->is_used == 1  ){
             addr_index++;
         }
 
@@ -169,7 +169,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             goto end;
         }
 
-        st_h->vpn_ctx->addr_index = addr_index;
+        st_h->vpn_ctx->addr_index = addr_index - 1;
         st_h->vpn_ctx->local_tun_ip = st_h->vpn_ctx->vpn->addrs[addr_index]->local_ip;
         st_h->vpn_ctx->remote_tun_ip = st_h->vpn_ctx->vpn->addrs[addr_index]->remote_ip;
 
@@ -180,7 +180,6 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         );
         lsquic_stream_wantread(stream, 0);
         lsquic_stream_wantwrite(stream, 1);
-        //lsquic_engine_process_conns(st_h->server_ctx->prog->prog_engine);
 
         if(vpn_init(st_h->vpn_ctx, IS_SERVER) == -1) {
             LSQ_ERROR("cannot create tun");
@@ -238,8 +237,14 @@ vpn_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     struct lsquic_conn_ctx *conn_h;
     
     st_h->vpn_ctx->vpn->addrs[st_h->vpn_ctx->addr_index]->is_used = 0;
-    event_del(st_h->read_tun_ev);
-    close(st_h->vpn_ctx->tun_fd);
+
+    if(st_h->read_tun_ev){
+        event_del(st_h->read_tun_ev);
+    }
+
+    if(st_h->vpn_ctx->tun_fd != -1){
+        close(st_h->vpn_ctx->tun_fd);
+    }
     LSQ_NOTICE("%s called", __func__);
     conn_h = find_conn_h(st_h->server_ctx, stream);
     LSQ_WARN("%s: TODO: free connection handler %p", __func__, conn_h);

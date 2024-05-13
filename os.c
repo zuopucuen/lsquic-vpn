@@ -465,8 +465,8 @@ Cmds firewall_rules_cmds(int is_server)
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__) || \
     defined(__DragonFly__) || defined(__NetBSD__)
         static const char *set_cmds[] =
-            { "sysctl -w net.inet.ip.forwarding=1",
-              "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up", NULL },
+            //{ "sysctl -w net.inet.ip.forwarding=1",
+            { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up", NULL },
                           *unset_cmds[] = { NULL, NULL };
 #else
         static const char *const *set_cmds = NULL, *const *unset_cmds = NULL;
