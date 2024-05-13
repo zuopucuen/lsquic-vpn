@@ -1,4 +1,3 @@
-//#include <stdio.h>
 #include <lsquic.h>
 #include <lsquic_logger.h>
 #include "os.h"
@@ -56,10 +55,11 @@ int addr_init(vpn_t *vpn, int tun_sum) {
     tun_sum = tun_sum > MAX_TUN_SUM ? MAX_TUN_SUM : tun_sum;
 
     for(i=0;i<tun_sum;i++){
-        hex_to_ip(local_ip, vpn->addrs[i].local_ip);
-        hex_to_ip(remote_ip, vpn->addrs[i].remote_ip);
-        vpn->addrs[i].is_used = 0;
-        LSQ_INFO("local %s, remote %s", vpn->addrs[i].local_ip, vpn->addrs[i].remote_ip);
+        vpn->addrs[i] = malloc(sizeof(vpn_tun_addr_t));
+        hex_to_ip(local_ip, vpn->addrs[i]->local_ip);
+        hex_to_ip(remote_ip, vpn->addrs[i]->remote_ip);
+        vpn->addrs[i]->is_used = 0;
+        LSQ_INFO("local %s, remote %s", vpn->addrs[i]->local_ip, vpn->addrs[i]->remote_ip);
 
         local_ip = local_ip + (1<<8);
         remote_ip = remote_ip + (1<<8);

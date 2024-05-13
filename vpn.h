@@ -72,16 +72,16 @@
 #define BUFF_SIZE 4096
 #define IS_CLIENT 0
 #define IS_SERVER 1
-#define MAX_TUN_SUM 100
+#define MAX_TUN_SUM 10
 
 typedef struct vpn_tun_addr_s {
-    char local_ip[16];
-    char remote_ip[16];
+    char local_ip[20];
+    char remote_ip[20];
     int is_used;
 } vpn_tun_addr_t;
 
 typedef struct vpn_s {
-    vpn_tun_addr_t addrs[4];
+    vpn_tun_addr_t *addrs[MAX_TUN_SUM];
     int max_conn;
 } vpn_t;
 
