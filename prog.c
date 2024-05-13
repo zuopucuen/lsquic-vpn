@@ -368,7 +368,7 @@ prog_connect (struct prog *prog, unsigned char *sess_resume, size_t sess_resume_
     struct service_port *sport;
 
     sport = TAILQ_FIRST(prog->prog_sports);
-    if (NULL == lsquic_engine_connect(prog->prog_engine, N_LSQVER,
+    if (NULL == lsquic_engine_connect(prog->prog_engine, LSQVER_ID29,
                     (struct sockaddr *) &sport->sp_local_addr,
                     (struct sockaddr *) &sport->sas, sport, NULL,
                     prog->prog_hostname ? prog->prog_hostname
