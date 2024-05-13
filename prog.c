@@ -56,7 +56,7 @@ prog_init (struct prog *prog, unsigned flags,
 #else
     prog->prog_settings.es_ecn      = 0;
 #endif
-    prog->prog_settings.es_idle_timeout = 10;
+    prog->prog_settings.es_idle_timeout = 60;
 
     prog->prog_api.ea_settings      = &prog->prog_settings;
     prog->prog_api.ea_stream_if     = stream_if;

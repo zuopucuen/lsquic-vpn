@@ -185,7 +185,9 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         if(vpn_init(st_h->vpn_ctx, IS_SERVER) == -1) {
             LSQ_ERROR("cannot create tun");
             goto end;
-        }  
+        }
+
+        st_h->vpn_ctx->vpn->addrs[addr_index]->is_used = 1;
         st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
                                    st_h->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
         event_add(st_h->read_tun_ev, NULL);

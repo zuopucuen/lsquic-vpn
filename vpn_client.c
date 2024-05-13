@@ -152,6 +152,8 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         if(vpn_init(st_h->client_ctx->vpn_ctx, IS_CLIENT) == -1)
             exit(1);
 
+        st_h->read_tun_ev = event_new(prog_eb(st_h->client_ctx->prog),
+                                   st_h->client_ctx->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
         goto end;
     }
 
