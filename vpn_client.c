@@ -94,6 +94,16 @@ static void tun_read_handler(int fd, short event, void *ctx){
     event_add(st_h->read_tun_ev, NULL);
 }
 
+static void 
+vpn_client_after_new_stream(lsquic_stream_ctx_t * st_h){
+    char hello[] = "Hello";
+
+    memcpy(st_h->buf, hello, sizeof(hello) + 1);
+    st_h->buf_off = st_h->buf_off + sizeof(hello) + 1;
+
+    lsquic_stream_wantwrite(st_h->stream, 1);
+    //lsquic_engine_process_conns(st_h->client_ctx->prog->prog_engine);
+}
 
 static lsquic_stream_ctx_t *
 vpn_client_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
@@ -102,6 +112,9 @@ vpn_client_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     st_h->stream = stream;
     st_h->client_ctx = stream_if_ctx;
     st_h->buf_off = 0;
+
+    vpn_client_after_new_stream(st_h);
+    
     st_h->read_tun_ev = event_new(prog_eb(st_h->client_ctx->prog),
                                     st_h->client_ctx->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
     event_add(st_h->read_tun_ev, NULL);
