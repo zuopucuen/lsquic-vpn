@@ -157,9 +157,9 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
     
     if(st_h->vpn_ctx->tun_fd == -1){
+        LSQ_INFO("say Hello: %s", st_h->buf);
         addr_index = 0;
 
-        LSQ_INFO("%d", st_h->vpn_ctx->vpn->addrs[0]);
         while(st_h->vpn_ctx->vpn->addrs[addr_index]->is_used == 1 && addr_index <= st_h->vpn_ctx->vpn->max_conn){
             addr_index++;
         }
@@ -178,15 +178,21 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             st_h->vpn_ctx->local_tun_ip, 
             st_h->vpn_ctx->remote_tun_ip
         );
+        lsquic_stream_wantread(stream, 0);
+        lsquic_stream_wantwrite(stream, 1);
+        //lsquic_engine_process_conns(st_h->server_ctx->prog->prog_engine);
 
         if(vpn_init(st_h->vpn_ctx, IS_SERVER) == -1) {
             LSQ_ERROR("cannot create tun");
             goto end;
-        } else {     
-            st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
+        }  
+        st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
                                    st_h->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
-            event_add(st_h->read_tun_ev, NULL);
-        }
+        event_add(st_h->read_tun_ev, NULL);
+
+        len = sprintf(st_h->buf, "%s,%s\n", st_h->vpn_ctx->remote_tun_ip, st_h->vpn_ctx->local_tun_ip);
+        st_h->buf_off = len;
+        goto out;
     }
 
     st_h->buf_off = len;
@@ -199,6 +205,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         LSQ_INFO("tun_write %zu bytes", len);
     }
 
+out:
     lsquic_stream_wantread(stream, 1);
     return;
 

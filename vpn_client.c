@@ -148,10 +148,11 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
         LSQ_INFO("local_ip: %s, remote_ip: %s", st_h->client_ctx->vpn_ctx->local_tun_ip, st_h->client_ctx->vpn_ctx->remote_tun_ip);
 
-        /*if(vpn_init(st_h->client_ctx->vpn_ctx, IS_CLIENT) <= 0){ 
--           ("create tun faile");
--           exit(EXIT_FAILURE);
--       }*/
+        
+        if(vpn_init(st_h->client_ctx->vpn_ctx, IS_CLIENT) == -1)
+            exit(1);
+
+        goto end;
     }
 
     if (tun_write(st_h->client_ctx->vpn_ctx->tun_fd, st_h->buf, len) != len) {
@@ -160,6 +161,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         LSQ_DEBUG("tun_write %zu bytes", len);
     }
 
+end:
     event_add(st_h->read_tun_ev, NULL);
     lsquic_stream_wantread(stream, 1);
 }

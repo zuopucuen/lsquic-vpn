@@ -12,7 +12,6 @@ static void hex_to_ip(u_int32_t hex, char *ip){
 }
 
 int vpn_init(vpn_ctx_t *vpn, int server_flag) {
-    memset(vpn, 0, sizeof(*vpn));
     vpn->is_server = server_flag;
     vpn->server_ip_or_name  = "auto";
     vpn->server_port    = "auto";
@@ -29,6 +28,8 @@ int vpn_init(vpn_ctx_t *vpn, int server_flag) {
         LSQ_ERROR("tun device creation");
         return -1;
     }
+
+    LSQ_INFO("local_ip:%s, remote_ip:%s", vpn->local_tun_ip, vpn->remote_tun_ip);
 
     printf("Interface: [%s]\n", vpn->if_name);
     if (tun_set_mtu(vpn->if_name, DEFAULT_MTU) != 0) {
@@ -56,6 +57,7 @@ int addr_init(vpn_t *vpn, int tun_sum) {
 
     for(i=0;i<tun_sum;i++){
         vpn->addrs[i] = malloc(sizeof(vpn_tun_addr_t));
+        memset(vpn->addrs[i], 0, sizeof(vpn_tun_addr_t));
         hex_to_ip(local_ip, vpn->addrs[i]->local_ip);
         hex_to_ip(remote_ip, vpn->addrs[i]->remote_ip);
         vpn->addrs[i]->is_used = 0;

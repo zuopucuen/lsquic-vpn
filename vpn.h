@@ -75,8 +75,8 @@
 #define MAX_TUN_SUM 10
 
 typedef struct vpn_tun_addr_s {
-    char local_ip[20];
-    char remote_ip[20];
+    char local_ip[16];
+    char remote_ip[16];
     int is_used;
 } vpn_tun_addr_t;
 
