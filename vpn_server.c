@@ -79,7 +79,7 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
 struct lsquic_stream_ctx {
     lsquic_stream_t     *stream;
     struct vpn_server_ctx   *server_ctx;
-    struct vpn_ctx_t        *vpn_ctx;
+    vpn_ctx_t           *vpn_ctx;
     struct event        *read_tun_ev;
     char                 buf[BUFF_SIZE];
     size_t               buf_off;
@@ -107,16 +107,20 @@ static lsquic_stream_ctx_t *
 vpn_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
 {
     lsquic_stream_ctx_t *st_h = malloc(sizeof(*st_h));
+    vpn_ctx_t *vpn_ctx = malloc(sizeof(*vpn_ctx));
+
+    memset(st_h, 0, sizeof(*st_h));
+    memset(vpn_ctx, 0, sizeof(*vpn_ctx));
+
+    vpn_ctx->tun_fd = 0;
+    vpn_ctx->addr_index = -1;
+
     st_h->stream = stream;
     st_h->server_ctx = stream_if_ctx;
+    st_h->vpn_ctx = vpn_ctx;
     st_h->buf_off = 0;
 
     LSQ_INFO("new steam");
-
-    st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
-                                   st_h->server_ctx->vpn->tun_fd, EV_READ, tun_read_handler, st_h);
-    event_add(st_h->read_tun_ev, NULL);
-
     lsquic_stream_wantread(stream, 1);
 
     return st_h;
@@ -140,27 +144,61 @@ static void
 vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
-    size_t len;
+    vpn_tun_addr_t *addr;
+    size_t addr_index, len;
+
 
     len = lsquic_stream_read(stream, st_h->buf, BUFF_SIZE);
     if (0 == len)
     {
-        LSQ_NOTICE("EOF: closing connection");
+        goto end;
+    }
+    
+    if(st_h->vpn_ctx->tun_fd == 0){
+        addr_index = 0;
+        
+        LSQ_INFO("local_ip:");
+
+        while(st_h->vpn_ctx->vpn->addrs[addr_index].is_used == 1 && addr_index <=4){
+            addr_index++;
+        }
+
+        if(addr_index >= 5){
+            LSQ_WARN("have no addr");
+            goto end;
+        }
+
+        st_h->vpn_ctx->addr_index = addr_index;
+        st_h->vpn_ctx->local_tun_ip = &st_h->vpn_ctx->vpn->addrs[addr_index].local_ip;
+        st_h->vpn_ctx->remote_tun_ip = &st_h->vpn_ctx->vpn->addrs[addr_index].remote_ip;
+        if(vpn_init(st_h->vpn_ctx, IS_SERVER) == -1) {
+            LSQ_ERROR("cannot create tun");
+            goto end;
+        } else {     
+            st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
+                                   st_h->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+            event_add(st_h->read_tun_ev, NULL);
+        }
+    }
+
+    st_h->buf_off = len;
+    LSQ_INFO("read from client channel %zu bytes", len);
+    
+    if (tun_write(st_h->vpn_ctx->tun_fd, st_h->buf, len) != len) {
+        LSQ_ERROR("tun_write ERROR");
+        goto end;
+    }else{
+        LSQ_INFO("tun_write %zu bytes", len);
+    }
+
+    lsquic_stream_wantread(stream, 1);
+    return;
+
+end:
+        LSQ_NOTICE("closing connection");
         lsquic_stream_shutdown(stream, 2);
         conn_h = find_conn_h(st_h->server_ctx, stream);
         lsquic_conn_close(conn_h->conn);
-    }else{
-        st_h->buf_off = len;
-        LSQ_INFO("read from client channel %zu bytes", len);
-    
-        if (tun_write(st_h->server_ctx->vpn->tun_fd, st_h->buf, len) != len) {
-            LSQ_ERROR("tun_write ERROR");
-        }else{
-            LSQ_DEBUG("tun_write %zu bytes", len);
-        }
-    
-        lsquic_stream_wantread(stream, 1);
-    }
 }
 
 static void
@@ -181,15 +219,18 @@ static void
 vpn_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
+    
+    st_h->vpn_ctx->vpn->addrs[st_h->vpn_ctx->addr_index].is_used = 0;
     event_del(st_h->read_tun_ev);
+    close(st_h->vpn_ctx->tun_fd);
     LSQ_NOTICE("%s called", __func__);
     conn_h = find_conn_h(st_h->server_ctx, stream);
     LSQ_WARN("%s: TODO: free connection handler %p", __func__, conn_h);
+    free(st_h->vpn_ctx);
     free(st_h);
 }
 
-
-const struct lsquic_stream_if server_echo_stream_if = {
+const struct lsquic_stream_if server_vpn_stream_if = {
     .on_new_conn            = vpn_server_on_new_conn,
     .on_conn_closed         = vpn_server_on_conn_closed,
     .on_new_stream          = vpn_server_on_new_stream,
@@ -197,7 +238,6 @@ const struct lsquic_stream_if server_echo_stream_if = {
     .on_write               = vpn_server_on_write,
     .on_close               = vpn_server_on_stream_close,
 };
-
 
 static void
 usage (const char *prog)
@@ -227,7 +267,7 @@ main (int argc, char **argv)
     TAILQ_INIT(&server_ctx.conn_ctxs);
 
     prog_init(&prog, LSENG_SERVER, &server_ctx.sports,
-                                        &server_echo_stream_if, &server_ctx);
+                                        &server_vpn_stream_if, &server_ctx);
 
     while (-1 != (opt = getopt(argc, argv, PROG_OPTS "hn:")))
     {
@@ -245,10 +285,10 @@ main (int argc, char **argv)
         }
     }
 
-    if(vpn_init(&vpn, IS_SERVER) <= 0){ 
+    if(addr_init(&vpn, 5) <= 0){ 
         LSQ_ERROR("vpn init error");
         exit(EXIT_FAILURE);
-    } 
+    }
 
     add_alpn("echo");
     if (0 != prog_prep(&prog))

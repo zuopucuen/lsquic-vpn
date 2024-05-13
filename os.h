@@ -18,7 +18,7 @@ typedef struct Cmds {
 
 Cmds firewall_rules_cmds(int is_server);
 
-int firewall_rules(vpn_t *context, int set, int silent);
+int firewall_rules(vpn_ctx_t *context, int set, int silent);
 
 int shell_cmd(const char *substs[][2], const char *args_str, int silent);
 

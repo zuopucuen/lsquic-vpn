@@ -32,7 +32,7 @@ struct lsquic_conn_ctx;
 struct vpn_client_ctx {
     struct lsquic_conn_ctx  *conn_h;
     struct prog                 *prog;
-    vpn_t  *vpn_ctx;
+    vpn_ctx_t  *vpn_ctx;
 };
 
 struct lsquic_conn_ctx {
@@ -126,6 +126,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     char c;
     size_t len;
+    char *tmp;
 
     len = lsquic_stream_read(stream, st_h->buf, BUFF_SIZE);
     if (0 == len)
@@ -136,6 +137,22 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
     st_h->buf_off = len;
     LSQ_INFO("read from server channel %zu bytes", len);
+
+    if(st_h->client_ctx->vpn_ctx->tun_fd == -1){
+        st_h->client_ctx->vpn_ctx->local_tun_ip = &st_h->buf[0];
+        st_h->client_ctx->vpn_ctx->remote_tun_ip = strchr(st_h->client_ctx->vpn_ctx->local_tun_ip, ',');
+        *st_h->client_ctx->vpn_ctx->remote_tun_ip = '\0';
+        st_h->client_ctx->vpn_ctx->remote_tun_ip++;
+        tmp = strchr(st_h->client_ctx->vpn_ctx->remote_tun_ip, '\n');
+        *tmp = '\0';
+
+        LSQ_INFO("local_ip: %s, remote_ip: %s", st_h->client_ctx->vpn_ctx->local_tun_ip, st_h->client_ctx->vpn_ctx->remote_tun_ip);
+
+        /*if(vpn_init(st_h->client_ctx->vpn_ctx, IS_CLIENT) <= 0){ 
+-           ("create tun faile");
+-           exit(EXIT_FAILURE);
+-       }*/
+    }
 
     if (tun_write(st_h->client_ctx->vpn_ctx->tun_fd, st_h->buf, len) != len) {
         LSQ_ERROR("tun_write");
@@ -177,7 +194,7 @@ vpn_client_on_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 }
 
 
-const struct lsquic_stream_if client_echo_stream_if = {
+const struct lsquic_stream_if client_vpn_stream_if = {
     .on_new_conn            = vpn_client_on_new_conn,
     .on_conn_closed         = vpn_client_on_conn_closed,
     .on_new_stream          = vpn_client_on_new_stream,
@@ -208,14 +225,16 @@ main (int argc, char **argv)
     struct sport_head sports;
     struct prog prog;
     struct vpn_client_ctx client_ctx;
-    vpn_t     vpn;
+    vpn_ctx_t     vpn_ctx;
 
     memset(&client_ctx, 0, sizeof(client_ctx));
+    memset(&vpn_ctx, 0, sizeof(vpn_ctx));
+    vpn_ctx.tun_fd = -1;
     client_ctx.prog = &prog;
-    client_ctx.vpn_ctx = &vpn;
+    client_ctx.vpn_ctx = &vpn_ctx;
 
     TAILQ_INIT(&sports);
-    prog_init(&prog, 0, &sports, &client_echo_stream_if, &client_ctx);
+    prog_init(&prog, 0, &sports, &client_vpn_stream_if, &client_ctx);
     prog.prog_api.ea_alpn = "echo";
 
     while (-1 != (opt = getopt(argc, argv, PROG_OPTS "h")))
@@ -230,11 +249,6 @@ main (int argc, char **argv)
                 exit(1);
         }
     }
-
-    if(vpn_init(&vpn, IS_CLIENT) <= 0){ 
-        LSQ_ERROR("vpn init error");
-        exit(EXIT_FAILURE);
-    } 
 
     int flags = fcntl(STDIN_FILENO, F_GETFL);
     flags |= O_NONBLOCK;

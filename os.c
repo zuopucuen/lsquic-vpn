@@ -525,7 +525,7 @@ Cmds firewall_rules_cmds(int is_server)
     }
 }
 
-int firewall_rules(vpn_t *vpn, int set, int silent)
+int firewall_rules(vpn_ctx_t *vpn, int set, int silent)
 {
     const char *       substs[][2] = { { "$LOCAL_TUN_IP6", vpn->local_tun_ip6 },
                                 { "$REMOTE_TUN_IP6", vpn->remote_tun_ip6 },

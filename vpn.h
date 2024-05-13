@@ -51,9 +51,8 @@
 #define OUTER_CONGESTION_CONTROL_ALG "bbr"
 #define BUFFERBLOAT_CONTROL 1
 #define NOTSENT_LOWAT (128 * 1024)
-#define DEFAULT_CLIENT_IP "192.168.192.1"
-#define DEFAULT_SERVER_IP "192.168.192.254"
-#define DEFAULT_PORT "443"
+#define BEGIN_SERVER_IP 0xC0A865FE // 192.168.101.254
+#define BEGIN_CLIENT_IP 0xC0A86501 // 192.168.101.1
 
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__ && !defined(NATIVE_BIG_ENDIAN)
@@ -73,11 +72,23 @@
 #define BUFF_SIZE 4096
 #define IS_CLIENT 0
 #define IS_SERVER 1
+#define MAX_TUN_SUM 100
+
+typedef struct vpn_tun_addr_s {
+    char local_ip[16];
+    char remote_ip[16];
+    int is_used;
+} vpn_tun_addr_t;
 
 typedef struct vpn_s {
+    vpn_tun_addr_t addrs[4];
+    int max_conn;
+} vpn_t;
+
+typedef struct vpn_ctx_s {
     const char *  wanted_if_name;
-    const char *  local_tun_ip;
-    const char *  remote_tun_ip;
+    char *  local_tun_ip;
+    char *  remote_tun_ip;
     const char *  local_tun_ip6;
     const char *  remote_tun_ip6;
     const char *  server_ip_or_name;
@@ -94,12 +105,12 @@ typedef struct vpn_s {
     int           listen_fd;
     int           congestion;
     int           firewall_rules_set;
-    struct pollfd fds[3];
-    uint32_t      uc_kx_st[12];
-    uint32_t      uc_st[2][12];
-} vpn_t;
+    int           addr_index;
+    vpn_t         * vpn;
+} vpn_ctx_t;
 
-int vpn_init(vpn_t *vpn, int server_flag);
+int addr_init(vpn_t *vpn, int tun_sum);
+int vpn_init(vpn_ctx_t *vpn, int server_flag);
 extern volatile sig_atomic_t exit_signal_received;
 
 #endif
