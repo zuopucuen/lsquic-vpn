@@ -42,8 +42,7 @@
 #define IS_CLIENT 0
 #define IS_SERVER 1
 #define MAX_TUN_SUM 10
-#define BEGIN_SERVER_IP 0xC0A865FE // 192.168.101.254
-#define BEGIN_CLIENT_IP 0xC0A86501 // 192.168.101.1
+#define BEGIN_DEFAULT_IP 0xC0A8C801 // 192.168.200.1
 
 typedef struct vpn_tun_addr_s {
     char local_ip[16];

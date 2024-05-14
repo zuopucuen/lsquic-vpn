@@ -56,6 +56,7 @@ prog_init (struct prog *prog, unsigned flags,
     prog->prog_settings.es_ecn      = 0;
 #endif
     prog->prog_settings.es_idle_timeout = 60;
+    prog->prog_settings.es_cc_algo = 2; // BBRv1
 
     prog->prog_api.ea_settings      = &prog->prog_settings;
     prog->prog_api.ea_stream_if     = stream_if;
@@ -100,114 +101,28 @@ void
 prog_print_common_options (const struct prog *prog, FILE *out)
 {
     fprintf(out,
-"   -0 FILE     Provide session resumption file (reading or writing)\n"
 #if HAVE_REGEX
 "   -s SVCPORT  Service port.  Takes on the form of host:port, host,\n"
-"                 or port.  If host is not an IPv4 or IPv6 address, it is\n"
-"                 resolved.  If host is not set, the value of SNI is\n"
-"                 used (see the -H flag).  If port is not set, the default\n"
+"                 or port. If port is not set, the default\n"
 "                 is 443.\n"
 #else
 "   -s SVCPORT  Service port.  Takes on the form of host:port or host.\n"
-"                 If host is not an IPv4 or IPv6 address, it is resolved.\n"
 "                 If port is not set, the default is 443.\n"
-#endif
-"                 Examples:\n"
-"                     127.0.0.1:12345\n"
-"                     ::1:443\n"
-"                     example.com\n"
-"                     example.com:8443\n"
-#if HAVE_REGEX
-"                     8443\n"
 #endif
 "                 If no -s option is given, 0.0.0.0:12345 address\n"
 "                 is used.\n"
-#if LSQUIC_DONTFRAG_SUPPORTED
-"   -D          Do not set `do not fragment' flag on outgoing UDP packets\n"
-#endif
-"   -z BYTES    Maximum size of outgoing UDP packets (client only).\n"
-"                 Overrides -o base_plpmtu.\n"
+"   -c Cert path. \n"
+"   -K Key path. \n"
+"   -C CA root  path。 \n"
 "   -L LEVEL    Log level for all modules.  Possible values are `debug',\n"
 "                 `info', `notice', `warn', `error', `alert', `emerg',\n"
 "                 and `crit'.\n"
-"   -l LEVELS   Log levels for modules, e.g.\n"
-"                 -l event=info,engine=debug\n"
-"               Can be specified more than once.\n"
-"   -m MAX      Maximum number of outgoing packet buffers that can be\n"
-"                 assigned at any one time.  By default, there is no max.\n"
-"   -y style    Timestamp style used in log messages.  The following styles\n"
-"                 are supported:\n"
-"                   0   No timestamp\n"
-"                   1   Millisecond time (this is the default).\n"
-"                         Example: 11:04:05.196\n"
-"                   2   Full date and millisecond time.\n"
-"                         Example: 2017-03-21 13:43:46.671\n"
-"                   3   Chrome-like timestamp: date/time.microseconds.\n"
-"                         Example: 1223/104613.946956\n"
-"                   4   Microsecond time.\n"
-"                         Example: 11:04:05.196308\n"
-"                   5   Full date and microsecond time.\n"
-"                         Example: 2017-03-21 13:43:46.671345\n"
-"   -S opt=val  Socket options.  Supported options:\n"
-"                   sndbuf=12345    # Sets SO_SNDBUF\n"
-"                   rcvbuf=12345    # Sets SO_RCVBUF\n"
-"   -W          Use stock PMI (malloc & free)\n"
+"   -G dir      SSL keys will be logged to files in this directory.\n"
 "   -A CC_ALGO  Congestion control algorithm.  The following algorithms are\n"
 "                 supported.\n"
 "                   1: Cubic\n"
-"                   2: BBRv1\n"
-"                   3: Adaptive congestion control (this is the default).\n"
-    );
-
-#if HAVE_SENDMMSG
-    fprintf(out,
-"   -g          Use sendmmsg() to send packets.\n"
-    );
-#endif
-#if HAVE_RECVMMSG
-    fprintf(out,
-"   -j          Use recvmmsg() to receive packets.\n"
-    );
-#endif
-
-    if (prog->prog_engine_flags & LSENG_SERVER)
-        fprintf(out,
-"   -c CERTSPEC Service specification.  The specification is three values\n"
-"                 separated by commas.  The values are:\n"
-"                   * Domain name\n"
-"                   * File containing cert in PEM format\n"
-"                   * File containing private key in DER or PEM format\n"
-"                 Example:\n"
-"                   -c www.example.com,/tmp/cert.pem,/tmp/key.pkcs8\n"
-        );
-    else
-    {
-        if (prog->prog_engine_flags & LSENG_HTTP)
-            fprintf(out,
-"   -H host     Value of `host' HTTP header.  This is also used as SNI\n"
-"                 in Client Hello.  This option is used to override the\n"
-"                 `host' part of the address specified using -s flag.\n"
-            );
-        else
-            fprintf(out,
-"   -H host     Value of SNI in CHLO.\n"
-            );
-    }
-
-#ifndef WIN32
-    fprintf(out,
-"   -G dir      SSL keys will be logged to files in this directory.\n"
-    );
-#endif
-
-
-    fprintf(out,
-"   -k          Connect UDP socket.  Only meant to be used with clients\n"
-"                 to pick up ICMP errors.\n"
-"   -i USECS    Clock granularity in microseconds.  Defaults to %u.\n",
-        LSQUIC_DF_CLOCK_GRANULARITY
-    );
-    fprintf(out,
+"                   2: BBRv1 (this is the default).\n"
+"                   3: Adaptive congestion control.\n"
 "   -h          Print this help screen and exit\n"
     );
 }
@@ -220,38 +135,6 @@ prog_set_opt (struct prog *prog, int opt, const char *arg)
 
     switch (opt)
     {
-#if LSQUIC_DONTFRAG_SUPPORTED
-    case 'D':
-        {
-            struct service_port *sport = TAILQ_LAST(prog->prog_sports, sport_head);
-            if (!sport)
-                sport = &prog->prog_dummy_sport;
-            sport->sp_flags |= SPORT_FRAGMENT_OK;
-        }
-        return 0;
-#endif
-#if HAVE_SENDMMSG
-    case 'g':
-        prog->prog_use_sendmmsg = 1;
-        return 0;
-#endif
-#if HAVE_RECVMMSG
-    case 'j':
-        prog->prog_use_recvmmsg = 1;
-        return 0;
-#endif
-    case 'm':
-        prog->prog_packout_max = atoi(arg);
-        return 0;
-    case 'z':
-        prog->prog_max_packet_size = atoi(arg);
-        return 0;
-    case 'W':
-        prog->prog_use_stock_pmi = 1;
-        return 0;
-    case 'A':
-        prog->prog_settings.es_cc_algo = atoi(optarg);
-        return 0;
     case 'c':
         prog->cert_file = arg;
         return 0;
@@ -261,66 +144,16 @@ prog_set_opt (struct prog *prog, int opt, const char *arg)
     case 'k':
         prog->key_file = arg;
         return 0;
-    case 'H':
-        if (prog->prog_engine_flags & LSENG_SERVER)
-            return -1;
-        prog->prog_hostname = arg;
-        return 0;
-    case 'y':
-        lsquic_log_to_fstream(stderr, atoi(arg));
-        return 0;
     case 'L':
         return lsquic_set_log_level(arg);
-    case 'l':
-        return lsquic_logger_lopt(arg);
-    case 'o':
-        return set_engine_option(&prog->prog_settings,
-                                            &prog->prog_version_cleared, arg);
-    case 'i':
-        prog->prog_settings.es_clock_granularity = atoi(arg);
-        return 0;
     case 's':
         if (0 == (prog->prog_engine_flags & LSENG_SERVER) &&
                                             !TAILQ_EMPTY(prog->prog_sports))
             return -1;
         return prog_add_sport(prog, arg);
-    case 'S':
-        {
-            struct service_port *sport = TAILQ_LAST(prog->prog_sports, sport_head);
-            if (!sport)
-                sport = &prog->prog_dummy_sport;
-            char *const name = strdup(optarg);
-            char *val = strchr(name, '=');
-            if (!val)
-            {
-                free(name);
-                return -1;
-            }
-            *val = '\0';
-            ++val;
-            if (0 == strcasecmp(name, "sndbuf"))
-            {
-                sport->sp_flags |= SPORT_SET_SNDBUF;
-                sport->sp_sndbuf = atoi(val);
-                free(name);
-                return 0;
-            }
-            else if (0 == strcasecmp(name, "rcvbuf"))
-            {
-                sport->sp_flags |= SPORT_SET_RCVBUF;
-                sport->sp_rcvbuf = atoi(val);
-                free(name);
-                return 0;
-            }
-            else
-            {
-                free(name);
-                return -1;
-            }
-        }
-    case '0':
-        s_sess_resume_file = optarg;
-        return 0;
+    case 'A':          
+        prog->prog_settings.es_cc_algo = atoi(optarg);
+        return 0; 
     case 'G':
         if (0 == stat(optarg, &st))
         {

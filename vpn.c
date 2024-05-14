@@ -21,9 +21,11 @@ int vpn_init(vpn_ctx_t *vpn, int server_flag) {
         return -1;
     }
 
-    LSQ_INFO("local_ip:%s, remote_ip:%s", vpn->local_tun_ip, vpn->remote_tun_ip);
+    LSQ_INFO("tun:%s, local_ip:%s, remote_ip:%s", 
+        vpn->if_name,
+        vpn->local_tun_ip, 
+        vpn->remote_tun_ip);
 
-    printf("Interface: [%s]\n", vpn->if_name);
     if (tun_set_mtu(vpn->if_name, DEFAULT_MTU) != 0) {
         LSQ_ERROR("cannot set mtu: %d", DEFAULT_MTU);
     }
@@ -42,8 +44,8 @@ int addr_init(vpn_t *vpn, int tun_sum) {
     int i;
     u_int32_t local_ip, remote_ip;
 
-    local_ip = BEGIN_CLIENT_IP;
-    remote_ip = BEGIN_SERVER_IP;
+    local_ip = BEGIN_DEFAULT_IP;
+    remote_ip = local_ip + 1;
 
     tun_sum = tun_sum > MAX_TUN_SUM ? MAX_TUN_SUM : tun_sum;
 
@@ -55,8 +57,8 @@ int addr_init(vpn_t *vpn, int tun_sum) {
         vpn->addrs[i]->is_used = 0;
         LSQ_INFO("local %s, remote %s", vpn->addrs[i]->local_ip, vpn->addrs[i]->remote_ip);
 
-        local_ip = local_ip + (1<<8);
-        remote_ip = remote_ip + (1<<8);
+        local_ip = local_ip + 10;
+        remote_ip = remote_ip + 10;
 
     }
     vpn->max_conn = tun_sum;
