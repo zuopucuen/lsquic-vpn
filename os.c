@@ -553,9 +553,8 @@ int firewall_rules(vpn_ctx_t *vpn, int set, int silent)
         return 0;
     }
     for (i = 0; cmds[i] != NULL; i++) {
-        LSQ_INFO("cmd: %s", cmds[i]);
         if (shell_cmd(substs, cmds[i], silent) != 0) {
-            fprintf(stderr, "Unable to run [%s]: [%s]\n", cmds[i], strerror(errno));
+            LSQ_ERROR("Unable to run [%s]: [%s]\n", cmds[i], strerror(errno));
             return -1;
         }
     }

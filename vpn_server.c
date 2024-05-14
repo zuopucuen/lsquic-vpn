@@ -146,9 +146,13 @@ static void
 vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
+    vpn_ctx_t *vpn_ctx;
+    vpn_t *vpn;
     vpn_tun_addr_t *addr;
     size_t addr_index, len;
 
+    vpn_ctx = st_h->vpn_ctx;
+    vpn = vpn_ctx->vpn;
 
     len = lsquic_stream_read(stream, st_h->buf, BUFF_SIZE);
     if (0 == len)
@@ -156,27 +160,27 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         goto end;
     }
     
-    if(st_h->vpn_ctx->tun_fd == -1){
+    if(vpn_ctx->tun_fd == -1){
         LSQ_INFO("say Hello: %s", st_h->buf);
         addr_index = 0;
 
-        while(addr_index < st_h->vpn_ctx->vpn->max_conn && st_h->vpn_ctx->vpn->addrs[addr_index]->is_used == 1  ){
+        while(addr_index < vpn->max_conn && vpn->addrs[addr_index]->is_used == 1  ){
             addr_index++;
         }
 
-        if(addr_index >= st_h->vpn_ctx->vpn->max_conn){
+        if(addr_index >= vpn->max_conn){
             LSQ_WARN("have no addr");
             goto end;
         }
 
-        st_h->vpn_ctx->addr_index = addr_index - 1;
-        st_h->vpn_ctx->local_tun_ip = st_h->vpn_ctx->vpn->addrs[addr_index]->local_ip;
-        st_h->vpn_ctx->remote_tun_ip = st_h->vpn_ctx->vpn->addrs[addr_index]->remote_ip;
+        vpn_ctx->addr_index = addr_index - 1;
+        vpn_ctx->local_tun_ip = vpn->addrs[addr_index]->local_ip;
+        vpn_ctx->remote_tun_ip = vpn->addrs[addr_index]->remote_ip;
 
         LSQ_INFO("index: %d,local ip: %s, remote_ip: %s",
-            st_h->vpn_ctx->addr_index,
-            st_h->vpn_ctx->local_tun_ip, 
-            st_h->vpn_ctx->remote_tun_ip
+            vpn_ctx->addr_index,
+            vpn_ctx->local_tun_ip, 
+            vpn_ctx->remote_tun_ip
         );
         lsquic_stream_wantread(stream, 0);
         lsquic_stream_wantwrite(stream, 1);
@@ -186,12 +190,12 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             goto end;
         }
 
-        st_h->vpn_ctx->vpn->addrs[addr_index]->is_used = 1;
+        vpn->addrs[addr_index]->is_used = 1;
         st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
-                                   st_h->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+                                   vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
         event_add(st_h->read_tun_ev, NULL);
 
-        len = sprintf(st_h->buf, "%s,%s\n", st_h->vpn_ctx->remote_tun_ip, st_h->vpn_ctx->local_tun_ip);
+        len = sprintf(st_h->buf, "%s,%s\n", vpn_ctx->remote_tun_ip, vpn_ctx->local_tun_ip);
         st_h->buf_off = len;
         goto out;
     }
@@ -199,7 +203,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     st_h->buf_off = len;
     LSQ_INFO("read from client channel %zu bytes", len);
     
-    if (tun_write(st_h->vpn_ctx->tun_fd, st_h->buf, len) != len) {
+    if (tun_write(vpn_ctx->tun_fd, st_h->buf, len) != len) {
         LSQ_ERROR("tun_write ERROR");
         goto end;
     }else{
@@ -235,20 +239,21 @@ static void
 vpn_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
-    
-    st_h->vpn_ctx->vpn->addrs[st_h->vpn_ctx->addr_index]->is_used = 0;
+    vpn_ctx_t *vpn_ctx;
+    vpn_t *vpn;
+    vpn_ctx = st_h->vpn_ctx;
+    vpn = st_h->vpn_ctx->vpn;
 
-    if(st_h->read_tun_ev){
-        event_del(st_h->read_tun_ev);
-    }
+    if(vpn_ctx->addr_index != -1)
+        vpn->addrs[vpn_ctx->addr_index]->is_used = 0;
 
-    if(st_h->vpn_ctx->tun_fd != -1){
-        close(st_h->vpn_ctx->tun_fd);
-    }
+    event_del(st_h->read_tun_ev);
+    close(vpn_ctx->tun_fd);
+
     LSQ_NOTICE("%s called", __func__);
     conn_h = find_conn_h(st_h->server_ctx, stream);
     LSQ_WARN("%s: TODO: free connection handler %p", __func__, conn_h);
-    free(st_h->vpn_ctx);
+    free(vpn_ctx);
     free(st_h);
 }
 
