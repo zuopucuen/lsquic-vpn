@@ -245,7 +245,8 @@ vpn_server_on_stream_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     if(vpn_ctx->addr_index != -1)
         vpn->addrs[vpn_ctx->addr_index]->is_used = 0;
 
-    event_del(st_h->read_tun_ev);
+    if(st_h->read_tun_ev)
+        event_del(st_h->read_tun_ev);
     close(vpn_ctx->tun_fd);
 
     LSQ_NOTICE("%s called", __func__);
