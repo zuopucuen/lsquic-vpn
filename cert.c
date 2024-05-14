@@ -59,7 +59,6 @@ select_alpn (SSL *ssl, const unsigned char **out, unsigned char *outlen,
 int verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     X509 *cert;
     char data[256];
-    char verify0[] = "72e6d7928c272ac4806366e51069052c9e1c0a";
 
     if (!preverify_ok) {
         int err = X509_STORE_CTX_get_error(x509_ctx);
@@ -74,8 +73,6 @@ int verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     BIGNUM *bn = ASN1_INTEGER_to_BN(serialNumber, NULL);
     char *serial = BN_bn2hex(bn);
     LSQ_INFO("serialNumber: %s", serial);
-    //if(strcmp(serial, verify0) != 0 && strcmp(serial, verify1) != 0 && strcmp(serial, verify2) != 0)
-    //    return 0;
 
     return preverify_ok;
 }
@@ -84,7 +81,7 @@ int set_cert(SSL_CTX  *ssl_ctx, const char *ca_file, const char *cert_file, cons
 
     SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(ssl_ctx, TLS1_3_VERSION);
-    //SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
+    SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
 
     LSQ_INFO("ca-file: %s, cert_file: %s, key_file: %s", ca_file, cert_file, key_file);
 
@@ -108,7 +105,7 @@ int set_cert(SSL_CTX  *ssl_ctx, const char *ca_file, const char *cert_file, cons
         return -1;
     }
 
-    SSL_CTX_set_default_verify_paths(ssl_ctx);
+    //SSL_CTX_set_default_verify_paths(ssl_ctx);
 
     return 1;
 }
