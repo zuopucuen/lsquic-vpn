@@ -202,7 +202,6 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     
     if (tun_write(vpn_ctx->tun_fd, st_h->buf, len) != len) {
         LSQ_ERROR("twrite to tun [%s] faile", st_h->vpn_ctx->if_name);
-        goto end;
     }else{
         LSQ_INFO("write to tun [%s] %zu bytes", st_h->vpn_ctx->if_name, len);
     }
