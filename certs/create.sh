@@ -15,7 +15,7 @@ openssl req -x509 -config conf/openssl.conf -new -nodes -key ca-key.pem -days 36
 openssl x509 -req -in server.csr -CA ca-cert.crt -CAkey ca-key.pem -CAcreateserial -out server.crt -days 36500 -sha256 -extfile conf/https.ext
 
 # 6.签发客户端证书
-openssl x509 -req -in client.csr -CA ca-cert.crt -CAkey ca-key.pem -CAcreateserial -out client.crt -days 36500 -sha256
+openssl x509 -req -in client.csr -CA ca-cert.crt -CAkey ca-key.pem -CAcreateserial -out client.crt -days 36500 -sha256 -extfile conf/https.ext
 
 # 7.将 ca 证书打包为 p12 格式
 openssl pkcs12 -export -in ca-cert.crt -inkey ca-key.pem -out ca-cert.p12 -password pass:1234567
