@@ -1,7 +1,5 @@
-/* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 /*
- * vpn_client.c -- This is really a "line client:" it connects to QUIC server
- * and sends it stuff, line by line.  It works in tandem with vpn_server.
+ * vpn_client.c -- QUIC client that for peer to peer vpn
  */
 
 #include <assert.h>
@@ -81,12 +79,12 @@ static void tun_read_handler(int fd, short event, void *ctx){
 
     len = tun_read(fd, st_h->buf, BUFF_SIZE);
     if (len <= 0) {
-        perror("tun_read");
+        LSQ_WARN("tun_read error: %zd", len);
         return;
     }
 
     st_h->buf_off = len;
-    LSQ_INFO("read from tun %zu bytes", len);
+    LSQ_INFO("read from tun [%s]: %zu bytes", st_h->client_ctx->vpn_ctx->if_name, len);
 
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->client_ctx->prog->prog_engine);
@@ -127,6 +125,9 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     char c;
     size_t len;
     char *tmp;
+    vpn_ctx_t *vpn_ctx;
+
+    vpn_ctx = st_h->client_ctx->vpn_ctx;
 
     len = lsquic_stream_read(stream, st_h->buf, BUFF_SIZE);
     if (0 == len)
@@ -136,31 +137,31 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 
     st_h->buf_off = len;
-    LSQ_INFO("read from server channel %zu bytes", len);
+    LSQ_INFO("read from server %llu: %zd bytes", lsquic_stream_id(stream), len);
 
-    if(st_h->client_ctx->vpn_ctx->tun_fd == -1){
-        st_h->client_ctx->vpn_ctx->local_tun_ip = &st_h->buf[0];
-        st_h->client_ctx->vpn_ctx->remote_tun_ip = strchr(st_h->client_ctx->vpn_ctx->local_tun_ip, ',');
-        *st_h->client_ctx->vpn_ctx->remote_tun_ip = '\0';
-        st_h->client_ctx->vpn_ctx->remote_tun_ip++;
-        tmp = strchr(st_h->client_ctx->vpn_ctx->remote_tun_ip, '\n');
+    if(vpn_ctx->tun_fd == -1){
+        vpn_ctx->local_tun_ip = &st_h->buf[0];
+        vpn_ctx->remote_tun_ip = strchr(vpn_ctx->local_tun_ip, ',');
+        *vpn_ctx->remote_tun_ip = '\0';
+        vpn_ctx->remote_tun_ip++;
+        tmp = strchr(vpn_ctx->remote_tun_ip, '\n');
         *tmp = '\0';
 
-        LSQ_INFO("local_ip: %s, remote_ip: %s", st_h->client_ctx->vpn_ctx->local_tun_ip, st_h->client_ctx->vpn_ctx->remote_tun_ip);
+        LSQ_INFO("local_ip: %s, remote_ip: %s", vpn_ctx->local_tun_ip, vpn_ctx->remote_tun_ip);
 
         
-        if(vpn_init(st_h->client_ctx->vpn_ctx, IS_CLIENT) == -1)
+        if(vpn_init(vpn_ctx, IS_CLIENT) == -1)
             exit(1);
 
         st_h->read_tun_ev = event_new(prog_eb(st_h->client_ctx->prog),
-                                   st_h->client_ctx->vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+                                   vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
         goto end;
     }
 
-    if (tun_write(st_h->client_ctx->vpn_ctx->tun_fd, st_h->buf, len) != len) {
-        LSQ_ERROR("tun_write");
+    if (tun_write(vpn_ctx->tun_fd, st_h->buf, len) != len) {
+        LSQ_ERROR("twrite to tun [%s] faile", vpn_ctx->if_name);
     }else{
-        LSQ_DEBUG("tun_write %zu bytes", len);
+        LSQ_INFO("write to tun [%s] %zu bytes", vpn_ctx->if_name, len);
     }
 
 end:

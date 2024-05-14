@@ -1,4 +1,3 @@
-# Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE.
 CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 
 PROJECT(lsquic-vpn C)

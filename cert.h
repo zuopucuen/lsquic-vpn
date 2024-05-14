@@ -1,4 +1,3 @@
-/* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 #ifndef TEST_CERT_H
 #define TEST_CERT_H
 #include <openssl/x509.h>

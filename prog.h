@@ -1,4 +1,3 @@
-/* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 /*
  * prog.h -- common setup and options for QUIC program
  */

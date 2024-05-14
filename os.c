@@ -3,30 +3,6 @@
 #include "os.h"
 #include "vpn.h"
 
-ssize_t safe_read(const int fd, void *const buf_, size_t count, const int timeout)
-{
-    struct pollfd  pfd;
-    unsigned char *buf    = (unsigned char *) buf_;
-    ssize_t        readnb = (ssize_t) -1;
-
-    while (readnb != 0 && count > (ssize_t) 0) {
-        while ((readnb = read(fd, buf, count)) < (ssize_t) 0) {
-            if (errno == EAGAIN) {
-                pfd.fd     = fd;
-                pfd.events = POLLIN;
-                if (poll(&pfd, (nfds_t) 1, timeout) <= 0) {
-                    return (ssize_t) -1;
-                }
-            } else if (errno != EINTR ) {
-                return (ssize_t) -1;
-            }
-        }
-        count -= readnb;
-        buf += readnb;
-    }
-    return (ssize_t)(buf - (unsigned char *) buf_);
-}
-
 ssize_t safe_write(const int fd, const void *const buf_, size_t count, const int timeout)
 {
     struct pollfd pfd;
@@ -58,15 +34,6 @@ ssize_t safe_read_partial(const int fd, void *const buf_, const size_t max_count
 
     while ((readnb = read(fd, buf, max_count)) < (ssize_t) 0 && errno == EINTR);
     return readnb;
-}
-
-ssize_t safe_write_partial(const int fd, void *const buf_, const size_t max_count)
-{
-    unsigned char *const buf = (unsigned char *) buf_;
-    ssize_t              writenb;
-
-    while ((writenb = write(fd, buf, max_count)) < (ssize_t) 0 && errno == EINTR);
-    return writenb;
 }
 
 #ifdef __linux__
@@ -150,45 +117,6 @@ int tun_create(char if_name[IFNAMSIZ], const char *wanted_name)
     }
     return tun_create_by_id(if_name, id);
 }
-#elif defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__NetBSD__)
-int tun_create(char if_name[IFNAMSIZ], const char *wanted_name)
-{
-    char         path[64];
-    unsigned int id;
-    int          fd;
-
-    if (wanted_name == NULL || *wanted_name == 0) {
-        for (id = 0; id < 32; id++) {
-            snprintf(if_name, IFNAMSIZ, "tun%u", id);
-            snprintf(path, sizeof path, "/dev/%s", if_name);
-            if ((fd = open(path, O_RDWR)) != -1) {
-                return fd;
-            }
-        }
-        return -1;
-    }
-    snprintf(if_name, IFNAMSIZ, "%s", wanted_name);
-    snprintf(path, sizeof path, "/dev/%s", wanted_name);
-
-    return open(path, O_RDWR);
-}
-#else
-int tun_create(char if_name[IFNAMSIZ], const char *wanted_name)
-{
-    char path[64];
-
-    if (wanted_name == NULL) {
-        fprintf(stderr,
-                "The tunnel device name must be specified on that platform "
-                "(try 'tun0')\n");
-        errno = EINVAL;
-        return -1;
-    }
-    snprintf(if_name, IFNAMSIZ, "%s", wanted_name);
-    snprintf(path, sizeof path, "/dev/%s", wanted_name);
-
-    return open(path, O_RDWR);
-}
 #endif
 
 int tun_set_mtu(const char *if_name, int mtu)
@@ -208,7 +136,7 @@ int tun_set_mtu(const char *if_name, int mtu)
     return close(fd);
 }
 
-#if !defined(__APPLE__) && !defined(__OpenBSD__)
+#if defined(__linux__)
 ssize_t tun_read(int fd, void *data, size_t size)
 {
     return safe_read_partial(fd, data, size);
@@ -309,8 +237,7 @@ static char *read_from_shell_command(char *result, size_t sizeof_result, const c
 const char *get_default_gw_ip(void)
 {
     static char gw[64];
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
-    defined(__DragonFly__) || defined(__NetBSD__)
+#if defined(__APPLE__)
     return read_from_shell_command(
         gw, sizeof gw, "route -n get default 2>/dev/null|awk '/gateway:/{print $2;exit}'");
 #elif defined(__linux__)
@@ -324,8 +251,7 @@ const char *get_default_gw_ip(void)
 const char *get_default_ext_if_name(void)
 {
     static char if_name[64];
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
-    defined(__DragonFly__) || defined(__NetBSD__)
+#if defined(__APPLE__)
     return read_from_shell_command(if_name, sizeof if_name,
                                    "route -n get default 2>/dev/null|awk "
                                    "'/interface:/{print $2;exit}'");
@@ -335,35 +261,6 @@ const char *get_default_ext_if_name(void)
 #else
     return NULL;
 #endif
-}
-
-int tcp_opts(int fd)
-{
-    int on = 1;
-
-    (void) setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof on);
-#ifdef TCP_QUICKACK
-    (void) setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, (char *) &on, sizeof on);
-#else
-    (void) setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &on, sizeof on);
-#endif
-#ifdef TCP_CONGESTION
-    (void) setsockopt(fd, IPPROTO_TCP, TCP_CONGESTION, OUTER_CONGESTION_CONTROL_ALG,
-                      sizeof OUTER_CONGESTION_CONTROL_ALG - 1);
-#endif
-#if BUFFERBLOAT_CONTROL && defined(TCP_NOTSENT_LOWAT)
-    (void) setsockopt(fd, IPPROTO_TCP, TCP_NOTSENT_LOWAT,
-                      (char *) (unsigned int[]){ NOTSENT_LOWAT }, sizeof(unsigned int));
-#endif
-#ifdef TCP_USER_TIMEOUT
-    (void) setsockopt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, (char *) (unsigned int[]){ TIMEOUT },
-                      sizeof(unsigned int));
-#endif
-#ifdef SO_MARK
-    (void) setsockopt(fd, SOL_SOCKET, SO_MARK, (char *) (unsigned int[]){ 42069U },
-                      sizeof(unsigned int));
-#endif
-    return 0;
 }
 
 int shell_cmd(const char *substs[][2], const char *args_str, int silent)
@@ -443,83 +340,30 @@ Cmds firewall_rules_cmds(int is_server)
 #ifdef __linux__
         static const char
             *set_cmds[] =
-                { "sysctl net.ipv4.ip_forward=1",
-                  "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
+                { "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
                   "ip link set dev $IF_NAME up",
-                  //"iptables -t raw -I PREROUTING ! -i $IF_NAME -d $LOCAL_TUN_IP -m addrtype ! "
-                  //"--src-type LOCAL -j DROP",
-                  //"iptables -t nat -A POSTROUTING -o $EXT_IF_NAME -s $REMOTE_TUN_IP -j MASQUERADE",
-                 // "iptables -t filter -A FORWARD -i $EXT_IF_NAME -o $IF_NAME -m state --state "
-                  //"RELATED,ESTABLISHED -j ACCEPT",
-                  //"iptables -t filter -A FORWARD -i $IF_NAME -o $EXT_IF_NAME -j ACCEPT",
                   NULL },
             *unset_cmds[] = {
-                //"iptables -t nat -D POSTROUTING -o $EXT_IF_NAME -s $REMOTE_TUN_IP -j MASQUERADE",
-                //"iptables -t filter -D FORWARD -i $EXT_IF_NAME -o $IF_NAME -m state --state "
-                //"RELATED,ESTABLISHED -j ACCEPT",
-                //"iptables -t filter -D FORWARD -i $IF_NAME -o $EXT_IF_NAME -j ACCEPT",
-                //"iptables -t raw -D PREROUTING ! -i $IF_NAME -d $LOCAL_TUN_IP -m addrtype ! "
-               // "--src-type LOCAL -j DROP",
                 NULL
             };
-#elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__) || \
-    defined(__DragonFly__) || defined(__NetBSD__)
-        static const char *set_cmds[] =
-            //{ "sysctl -w net.inet.ip.forwarding=1",
-            { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up", NULL },
+#elif defined(__APPLE__)
+        static const char *set_cmds[] = { 
+            "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up", NULL },
                           *unset_cmds[] = { NULL, NULL };
-#else
-        static const char *const *set_cmds = NULL, *const *unset_cmds = NULL;
 #endif
         return (Cmds){ set_cmds, unset_cmds };
     } else {
-#if defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__) || \
-    defined(__DragonFly__) || defined(__NetBSD__)
+#if defined(__APPLE__) 
         static const char *set_cmds[] =
-            { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up",
-#ifndef NO_DEFAULT_ROUTES
-              //"route add $EXT_IP $EXT_GW_IP",
-              //"route add 0/1 $REMOTE_TUN_IP",
-              //"route add 128/1 $REMOTE_TUN_IP",
-#endif
-              NULL },
-                          *unset_cmds[] = { NULL, 
-#ifndef NO_DEFAULT_ROUTES
-                              //"route delete $EXT_IP",
-                              //"route delete 0/1",
-                              //"route delete 128/1",
-#endif
-                              NULL
-                          };
+            { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up", NULL },
+                          *unset_cmds[] = { NULL,};
 #elif defined(__linux__)
         static const char
             *set_cmds[] =
-                { "sysctl net.ipv4.tcp_congestion_control=bbr",
-                  "ip link set dev $IF_NAME up",
-                  //"iptables -t raw -I PREROUTING ! -i $IF_NAME -d $LOCAL_TUN_IP -m addrtype ! "
-                  //"--src-type LOCAL -j DROP",
+                { "ip link set dev $IF_NAME up",
                   "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
-                  //"ip -6 addr add $LOCAL_TUN_IP6 peer $REMOTE_TUN_IP6/96 dev $IF_NAME",
-#ifndef NO_DEFAULT_ROUTES
-                  //"ip route add default dev $IF_NAME table 42069",
-                  //"ip -6 route add default dev $IF_NAME table 42069",
-                  //"ip rule add not fwmark 42069 table 42069",
-                  //"ip -6 rule add not fwmark 42069 table 42069",
-                  //"ip rule add table main suppress_prefixlength 0",
-                  //"ip -6 rule add table main suppress_prefixlength 0",
-#endif
                   NULL },
-            *unset_cmds[] = {
-#ifndef NO_DEFAULT_ROUTES
-                //"ip rule delete table 42069",
-                //"ip -6 rule delete table 42069",
-                //"ip rule delete table main suppress_prefixlength 0",
-                //"ip -6 rule delete table main suppress_prefixlength 0",
-#endif
-                //"iptables -t raw -D PREROUTING ! -i $IF_NAME -d $LOCAL_TUN_IP -m addrtype ! "
-                //"--src-type LOCAL -j DROP",
-                NULL
-            };
+            *unset_cmds[] = { NULL };
 #else
         static const char *const *set_cmds = NULL, *const *unset_cmds = NULL;
 #endif
@@ -529,14 +373,8 @@ Cmds firewall_rules_cmds(int is_server)
 
 int firewall_rules(vpn_ctx_t *vpn, int set, int silent)
 {
-    const char *       substs[][2] = { { "$LOCAL_TUN_IP6", vpn->local_tun_ip6 },
-                                { "$REMOTE_TUN_IP6", vpn->remote_tun_ip6 },
-                                { "$LOCAL_TUN_IP", vpn->local_tun_ip },
+    const char *       substs[][2] = { { "$LOCAL_TUN_IP", vpn->local_tun_ip },
                                 { "$REMOTE_TUN_IP", vpn->remote_tun_ip },
-                                { "$EXT_IP", vpn->server_ip },
-                                { "$EXT_PORT", vpn->server_port },
-                                { "$EXT_IF_NAME", vpn->ext_if_name },
-                                { "$EXT_GW_IP", vpn->ext_gw_ip },
                                 { "$IF_NAME", vpn->if_name },
                                 { NULL, NULL } };
     const char *const *cmds;
@@ -547,8 +385,7 @@ int firewall_rules(vpn_ctx_t *vpn, int set, int silent)
     }
     if ((cmds = (set ? firewall_rules_cmds(vpn->is_server).set
                      : firewall_rules_cmds(vpn->is_server).unset)) == NULL) {
-        fprintf(stderr,
-                "Routing commands for that operating system have not been "
+        LSQ_ERROR("Routing commands for that operating system have not been "
                 "added yet.\n");
         return 0;
     }

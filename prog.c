@@ -1,4 +1,3 @@
-/* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 #include <assert.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -552,7 +551,7 @@ prog_signal_handler (int fd, short what, void *arg)
     prog->prog_flags |= PROG_FLAG_COOLDOWN;
     lsquic_engine_cooldown(prog->prog_engine);
     prog_process_conns(prog);
-    prog_stop(prog);
+    exit(EXIT_SUCCESS);
 }
 
 

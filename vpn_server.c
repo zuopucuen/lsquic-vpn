@@ -1,6 +1,5 @@
-/* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 /*
- * vpn_server.c -- QUIC server that echoes back input line by line
+ * vpn_server.c -- QUIC server that for peer to peer vpn
  */
 
 #include <assert.h>
@@ -24,8 +23,6 @@
 #include "prog.h"
 #include "vpn.h"
 #include "os.h"
-
-struct lsquic_conn_ctx;
 
 struct vpn_server_ctx {
     TAILQ_HEAD(, lsquic_conn_ctx)   conn_ctxs;
@@ -91,11 +88,11 @@ static void tun_read_handler(int fd, short event, void *ctx){
 
     len = tun_read(fd, st_h->buf, BUFF_SIZE);
     if (len <= 0) {
-        perror("tun_read");
+        LSQ_WARN("tun_read error: %zd", len);
         return;
     }
     st_h->buf_off = len;
-    LSQ_INFO("read from tun %zu bytes", len);
+    LSQ_INFO("read from tun [%s] %zu bytes", st_h->vpn_ctx->if_name, len);
 
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->server_ctx->prog->prog_engine);
@@ -177,7 +174,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         vpn_ctx->local_tun_ip = vpn->addrs[addr_index]->local_ip;
         vpn_ctx->remote_tun_ip = vpn->addrs[addr_index]->remote_ip;
 
-        LSQ_INFO("index: %d,local ip: %s, remote_ip: %s",
+        LSQ_INFO("Initialization of the new link address was successful :index: %d,local ip: %s, remote_ip: %s",
             vpn_ctx->addr_index,
             vpn_ctx->local_tun_ip, 
             vpn_ctx->remote_tun_ip
@@ -201,13 +198,13 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 
     st_h->buf_off = len;
-    LSQ_INFO("read from client channel %zu bytes", len);
+    LSQ_INFO("read from client %llu: %zd bytes", lsquic_stream_id(stream), len);
     
     if (tun_write(vpn_ctx->tun_fd, st_h->buf, len) != len) {
-        LSQ_ERROR("tun_write ERROR");
+        LSQ_ERROR("twrite to tun [%s] faile", st_h->vpn_ctx->if_name);
         goto end;
     }else{
-        LSQ_INFO("tun_write %zu bytes", len);
+        LSQ_INFO("write to tun [%s] %zu bytes", st_h->vpn_ctx->if_name, len);
     }
 
 out:
@@ -228,6 +225,7 @@ vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     ssize_t len;
 
     len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
+    LSQ_INFO("write to client %llu: %zd bytes", lsquic_stream_id(stream), len);
     st_h->buf_off = 0;
     lsquic_stream_flush(stream);
     lsquic_stream_wantwrite(stream, 0);

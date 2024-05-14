@@ -13,15 +13,7 @@ static void hex_to_ip(u_int32_t hex, char *ip){
 
 int vpn_init(vpn_ctx_t *vpn, int server_flag) {
     vpn->is_server = server_flag;
-    vpn->server_ip_or_name  = "auto";
-    vpn->server_port    = "auto";
-    vpn->wanted_if_name = "";
-    vpn->wanted_ext_gw_ip = "auto";
 
-    if ((vpn->ext_if_name = get_default_ext_if_name()) == NULL && vpn->is_server) {
-        LSQ_ERROR("Unable to automatically determine the external interface\n");
-        return -1;
-    }
     vpn->tun_fd = tun_create(vpn->if_name, vpn->wanted_if_name);
     
     if (vpn->tun_fd == -1) {

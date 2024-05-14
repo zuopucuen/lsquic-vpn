@@ -1,4 +1,3 @@
-/* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 #if __GNUC__
 #define _GNU_SOURCE     /* For struct in6_pktinfo */
 #endif

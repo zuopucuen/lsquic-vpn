@@ -1,8 +1,3 @@
-/* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
-/*
- * Test client's and server's common components.
- */
-
 #ifndef TEST_COMMON_H
 #define TEST_COMMON_H 1
 

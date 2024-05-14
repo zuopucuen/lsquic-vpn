@@ -1,4 +1,3 @@
-/* Copyright (c) 2017 - 2022 LiteSpeed Technologies Inc.  See LICENSE. */
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,22 +60,16 @@ int verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     X509 *cert;
     char data[256];
     char verify0[] = "72e6d7928c272ac4806366e51069052c9e1c0a";
-    char verify1[] = "203cc81cb7938accbfb9c4ca50faab5d9dc996e1";
-    char verify2[] = "72e6d7928c272ac4806366e51069052c9e1c08";
 
-    // 如果OpenSSL的预验证失败，直接返回失败
     if (!preverify_ok) {
         int err = X509_STORE_CTX_get_error(x509_ctx);
         LSQ_EMERG("OpenSSL pre-verification error: %s\n", X509_verify_cert_error_string(err));
         return preverify_ok;
     }
 
-    // 获取当前验证的证书
     cert = X509_STORE_CTX_get_current_cert(x509_ctx);
-    if (!cert) return 0;  // 无法获取证书，验证失败
+    if (!cert) return 0;
 
-    // 获取证书中的公用名 (CN)
-    //X509_NAME_get_text_by_NID(X509_get_serialNumber(cert), NID_commonName, data, 256);
     ASN1_INTEGER *serialNumber = X509_get_serialNumber(cert);
     BIGNUM *bn = ASN1_INTEGER_to_BN(serialNumber, NULL);
     char *serial = BN_bn2hex(bn);
@@ -84,16 +77,14 @@ int verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx) {
     //if(strcmp(serial, verify0) != 0 && strcmp(serial, verify1) != 0 && strcmp(serial, verify2) != 0)
     //    return 0;
 
-    // 如果需要，可以增加更多的检查，如检查组织名、过期时间等
-
-    return preverify_ok;  // 所有检查都通过，验证成功
+    return preverify_ok;
 }
 
 int set_cert(SSL_CTX  *ssl_ctx, const char *ca_file, const char *cert_file, const char *key_file){
 
     SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(ssl_ctx, TLS1_3_VERSION);
-    SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
+    //SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
 
     LSQ_INFO("ca-file: %s, cert_file: %s, key_file: %s", ca_file, cert_file, key_file);
 
@@ -149,7 +140,7 @@ load_cert (struct lsquic_hash *certs, const char *ca_file, const char *cert_file
     {
         const char *const s = getenv("LSQUIC_ENABLE_EARLY_DATA");
         if (!s || atoi(s))
-            SSL_CTX_set_early_data_enabled(cert->ce_ssl_ctx, 1);    /* XXX */
+            SSL_CTX_set_early_data_enabled(cert->ce_ssl_ctx, 1);
     }
 
     const int was = SSL_CTX_set_session_cache_mode(cert->ce_ssl_ctx, 1);
