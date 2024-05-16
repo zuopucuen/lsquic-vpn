@@ -162,7 +162,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_ctx = st_h->vpn_ctx;
     vpn = vpn_ctx->vpn;
     cur_buf = vpn_ctx->packet_buf + vpn_ctx->buf_off;
-    buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf;
+    buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
 
     len = lsquic_stream_read(stream, cur_buf, BUFF_SIZE - buf_used);
     if (0 == len)
@@ -215,14 +215,16 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_ctx->buf_off = vpn_ctx->buf_off + len;
     memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
     packet_size = ntohl(packet_size);
-    LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
-    while(0 < packet_size  &&  packet_size < (vpn_ctx->buf_off - VPN_HEAD_SIZE)){       
+    //LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
+    while(0 < packet_size  &&  packet_size < (vpn_ctx->buf_off - VPN_HEAD_SIZE)){   
+         LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);    
         if (tun_write(vpn_ctx->tun_fd, vpn_ctx->packet_buf + VPN_HEAD_SIZE, packet_size) != packet_size) {
             LSQ_ERROR("twrite to tun [%s] faile", st_h->vpn_ctx->if_name);
         }else{
             LSQ_INFO("write to tun [%s] %zu bytes", st_h->vpn_ctx->if_name, packet_size);
         }
         vpn_ctx->buf_off = vpn_ctx->buf_off - packet_size - VPN_HEAD_SIZE;
+        LSQ_WARN("buf_ofF: %zu", vpn_ctx->buf_off );
         vpn_ctx->packet_buf = vpn_ctx->packet_buf + packet_size + VPN_HEAD_SIZE;
         if(vpn_ctx->buf_off  > VPN_HEAD_SIZE) {
             memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
@@ -232,7 +234,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         }
     }
 
-    buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf;
+    buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
     if (BUFF_SIZE - buf_used < DEFAULT_MTU)
     {
         memcpy(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
