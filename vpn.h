@@ -36,13 +36,13 @@
 #endif
 
 #define VERSION_STRING "0.1.4"
-#define DEFAULT_MTU 2000
+#define DEFAULT_MTU 1500
 #define TIMEOUT (60 * 1000)
 #define BUFF_SIZE 8092
 #define IS_CLIENT 0
 #define IS_SERVER 1
 #define MAX_TUN_SUM 10
-#define BEGIN_DEFAULT_IP 0xC0A8C801 // 192.168.200.1
+#define BEGIN_DEFAULT_IP 0xC0A8FF01 // 192.168.255.1
 #define VPN_HEAD_SIZE 4
 
 typedef struct vpn_tun_addr_s {
