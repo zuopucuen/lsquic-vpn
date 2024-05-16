@@ -36,7 +36,7 @@
 #endif
 
 #define VERSION_STRING "0.1.4"
-#define DEFAULT_MTU 1500
+#define DEFAULT_MTU 2000
 #define TIMEOUT (60 * 1000)
 #define BUFF_SIZE 8092
 #define IS_CLIENT 0
