@@ -36,13 +36,14 @@
 #endif
 
 #define VERSION_STRING "0.1.4"
-#define DEFAULT_MTU 9000
+#define DEFAULT_MTU 1500
 #define TIMEOUT (60 * 1000)
-#define BUFF_SIZE 4096
+#define BUFF_SIZE 8092
 #define IS_CLIENT 0
 #define IS_SERVER 1
 #define MAX_TUN_SUM 10
 #define BEGIN_DEFAULT_IP 0xC0A8C801 // 192.168.200.1
+#define VPN_HEAD_SIZE 4
 
 typedef struct vpn_tun_addr_s {
     char local_ip[16];
@@ -64,6 +65,9 @@ typedef struct vpn_ctx_s {
     int           tun_fd;
     int           firewall_rules_set;
     int           addr_index;
+    char * packet_buf;
+    char          buf[BUFF_SIZE];
+    size_t        buf_off;
     vpn_t         * vpn;
 } vpn_ctx_t;
 

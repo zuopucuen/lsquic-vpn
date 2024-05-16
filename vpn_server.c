@@ -83,15 +83,21 @@ struct lsquic_stream_ctx {
 };
 
 static void tun_read_handler(int fd, short event, void *ctx){
-    ssize_t              len;
+    ssize_t              len, llen;
     lsquic_stream_ctx_t *st_h = ctx;
-
-    len = tun_read(fd, st_h->buf, BUFF_SIZE);
+    vpn_ctx_t *vpn;
+    char * cur_buf;
+    
+    cur_buf = st_h->buf + st_h->buf_off;
+    len = tun_read(fd, cur_buf, BUFF_SIZE);
     if (len <= 0) {
         LSQ_WARN("tun_read error: %zd", len);
         return;
     }
-    st_h->buf_off = len;
+
+    llen = htonl(len);
+    memcpy(st_h->buf, &llen, VPN_HEAD_SIZE);
+    st_h->buf_off = st_h->buf_off + len;
     LSQ_INFO("read from tun [%s] %zu bytes", st_h->vpn_ctx->if_name, len);
 
     lsquic_stream_wantwrite(st_h->stream, 1);
@@ -113,11 +119,12 @@ vpn_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     vpn_ctx->tun_fd = -1;
     vpn_ctx->addr_index = -1;
     vpn_ctx->vpn = server_ctx->vpn;
+    vpn_ctx->buf_off = 0;
 
     st_h->stream = stream;
     st_h->server_ctx = server_ctx;
     st_h->vpn_ctx = vpn_ctx;
-    st_h->buf_off = 0;
+    st_h->buf_off = 1;
 
     LSQ_INFO("new steam");
     lsquic_stream_wantread(stream, 1);
@@ -146,19 +153,23 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_ctx_t *vpn_ctx;
     vpn_t *vpn;
     vpn_tun_addr_t *addr;
-    size_t addr_index, len;
+    size_t addr_index, len, packet_size;
+    char * cur_buf;
 
     vpn_ctx = st_h->vpn_ctx;
     vpn = vpn_ctx->vpn;
+    cur_buf = vpn_ctx->buf + vpn_ctx->buf_off;
 
-    len = lsquic_stream_read(stream, st_h->buf, BUFF_SIZE);
+    len = lsquic_stream_read(stream, cur_buf, BUFF_SIZE - vpn_ctx->buf_off);
     if (0 == len)
     {
         goto end;
     }
     
+    LSQ_INFO("read from client %llu: %zd bytes", lsquic_stream_id(stream), len);
+    
     if(vpn_ctx->tun_fd == -1){
-        LSQ_INFO("say Hello: %s", st_h->buf);
+        LSQ_INFO("say Hello: %s", cur_buf++);
         addr_index = 0;
 
         while(addr_index < vpn->max_conn && vpn->addrs[addr_index]->is_used == 1  ){
@@ -179,6 +190,8 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             vpn_ctx->local_tun_ip, 
             vpn_ctx->remote_tun_ip
         );
+        len = sprintf(st_h->buf, "%s,%s\n", vpn_ctx->remote_tun_ip, vpn_ctx->local_tun_ip);
+        st_h->buf_off = len;
         lsquic_stream_wantread(stream, 0);
         lsquic_stream_wantwrite(stream, 1);
 
@@ -188,23 +201,34 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         }
 
         vpn->addrs[addr_index]->is_used = 1;
+        vpn_ctx->packet_buf = vpn_ctx->buf;
         st_h->read_tun_ev = event_new(prog_eb(st_h->server_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
         event_add(st_h->read_tun_ev, NULL);
 
-        len = sprintf(st_h->buf, "%s,%s\n", vpn_ctx->remote_tun_ip, vpn_ctx->local_tun_ip);
-        st_h->buf_off = len;
         goto out;
     }
 
-    st_h->buf_off = len;
-    LSQ_INFO("read from client %llu: %zd bytes", lsquic_stream_id(stream), len);
-    
-    if (tun_write(vpn_ctx->tun_fd, st_h->buf, len) != len) {
-        LSQ_ERROR("twrite to tun [%s] faile", st_h->vpn_ctx->if_name);
-    }else{
-        LSQ_INFO("write to tun [%s] %zu bytes", st_h->vpn_ctx->if_name, len);
+    vpn_ctx->buf_off = vpn_ctx->buf_off + len;
+    cur_buf = vpn_ctx->buf;
+    memcpy(&packet_size, vpn_ctx->buf, VPN_HEAD_SIZE);
+    packet_size = ntohl(packet_size);
+    LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
+    while(0 < packet_size  &&  packet_size < vpn_ctx->buf_off){       
+        if (tun_write(vpn_ctx->tun_fd, cur_buf + VPN_HEAD_SIZE, packet_size) != len) {
+            LSQ_ERROR("twrite to tun [%s] faile", st_h->vpn_ctx->if_name);
+        }else{
+            LSQ_INFO("write to tun [%s] %zu bytes", st_h->vpn_ctx->if_name, len);
+        }
+        vpn_ctx->buf_off = vpn_ctx->buf_off - packet_size - VPN_HEAD_SIZE;
+        cur_buf = cur_buf + packet_size;
+        if(vpn_ctx->buf_off  > VPN_HEAD_SIZE) {
+            memcpy(&packet_size, cur_buf, VPN_HEAD_SIZE);
+            packet_size = ntohl(packet_size);
+        }
     }
+
+    memcpy(vpn_ctx->buf, cur_buf, vpn_ctx->buf_off);
 
 out:
     lsquic_stream_wantread(stream, 1);
@@ -225,7 +249,7 @@ vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
     len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
     LSQ_INFO("write to client %llu: %zd bytes", lsquic_stream_id(stream), len);
-    st_h->buf_off = 0;
+    st_h->buf_off = VPN_HEAD_SIZE;
     lsquic_stream_flush(stream);
     lsquic_stream_wantwrite(stream, 0);
     lsquic_stream_wantread(stream, 1);
