@@ -141,7 +141,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 
     len = lsquic_stream_read(stream, cur_buf, BUFF_SIZE - buf_used);
-    if (len <= 0)
+    if (len < 0)
     {
         lsquic_stream_shutdown(stream, 2);
         exit(1);
@@ -248,6 +248,7 @@ main (int argc, char **argv)
     vpn_ctx.tun_fd = -1;
     client_ctx.prog = &prog;
     client_ctx.vpn_ctx = &vpn_ctx;
+    client_ctx.vpn_ctx->buf = vpn_ctx.buf_1;
     client_ctx.vpn_ctx->packet_buf = vpn_ctx.buf;
     client_ctx.vpn_ctx->buf_off = 0;
 

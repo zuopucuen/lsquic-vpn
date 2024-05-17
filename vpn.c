@@ -69,6 +69,7 @@ int addr_init(vpn_t *vpn, int tun_sum) {
 void
 vpn_tun_write(vpn_ctx_t *vpn_ctx){
     size_t packet_size, buf_used;
+    char *tmp_buf;
 
     memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
     packet_size = ntohl(packet_size);
@@ -96,9 +97,12 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
     }
 
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
-    if (sizeof(vpn_ctx->buf) - buf_used < DEFAULT_MTU)
+    if (BUFF_SIZE - buf_used < DEFAULT_MTU)
     {
-        memmove(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
+        
+        tmp_buf = vpn_ctx->buf == vpn_ctx->buf_1 ? vpn_ctx->buf_2 : vpn_ctx->buf_1;
+        memmove(tmp_buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
+        vpn_ctx->buf = tmp_buf;
         vpn_ctx->packet_buf = vpn_ctx->buf;
     }
 }

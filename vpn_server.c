@@ -122,6 +122,7 @@ vpn_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     vpn_ctx->tun_fd = -1;
     vpn_ctx->addr_index = -1;
     vpn_ctx->vpn = server_ctx->vpn;
+    vpn_ctx->buf = vpn_ctx->buf_1;
     vpn_ctx->packet_buf = vpn_ctx->buf;
     vpn_ctx->buf_off = 0;
 
