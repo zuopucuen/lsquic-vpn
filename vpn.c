@@ -96,7 +96,7 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
     }
 
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
-    if (sizeof(vpn_ctx->buf) - buf_used < DEFAULT_MTU)
+    if (BUFF_SIZE - buf_used < DEFAULT_MTU)
     {
         memmove(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
         vpn_ctx->packet_buf = vpn_ctx->buf;
