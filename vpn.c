@@ -72,7 +72,7 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
 
     memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
     packet_size = ntohl(packet_size);
-    LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
+   
     while(0 < packet_size  &&  packet_size <= (vpn_ctx->buf_off - VPN_HEAD_SIZE)){   
          LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
 
@@ -121,7 +121,7 @@ size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
         LSQ_WARN("The data read(%zu) is greater than mtu(%d)", len, DEFAULT_MTU);
         return -1;
     }
-    cur_buf = buf + buf_off;
+    cur_buf -= VPN_HEAD_SIZE;
     llen = htonl(len);
     memcpy(cur_buf, &llen, VPN_HEAD_SIZE);
     buf_off = buf_off + len + VPN_HEAD_SIZE;

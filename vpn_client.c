@@ -172,26 +172,40 @@ end:
 static void
 vpn_client_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
-    /* Here we make an assumption that we can write the whole buffer.
-     * Don't do it in a real program.
-     */
-
     size_t len;
+    size_t total_written = 0;
 
-    len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
-    LSQ_INFO("write to client %llu: %zd bytes", lsquic_stream_id(stream), len);
+    while (total_written < st_h->buf_off) {
 
-    if(len<=0){
-        goto end;
-    }
+        len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
+        LSQ_INFO("write to client %llu: %zd bytes", lsquic_stream_id(stream), len);
 
-    if(len == st_h->buf_off){
-        st_h->buf_off = 0;
-        goto end;
-    }
+        if(len > 0){
+            total_written += len;
+        }else if(len == 0){
+            LSQ_WARN("read 0 stream while close");
+            lsquic_stream_shutdown(stream, 2);  // Close both reading and writing sides
+            lsquic_stream_close(stream);  // Release the stream
+            return;
+        }else{
+            int err = errno;
+            if (err == EWOULDBLOCK || err == EAGAIN) {
+                LSQ_WARN("Stream not ready for writing, try again later\n");
+
+            } else {
+                LSQ_ERROR("Error writing to stream: %s\n", strerror(err));
+            }
+            break;
+        }
     
-    st_h->buf_off = st_h->buf_off - len;
-    memmove(st_h->buf, st_h->buf + len, st_h->buf_off);
+    }
+
+    if (total_written == st_h->buf_off) {
+        st_h->buf_off = 0;
+    } else if(total_written > 0) {
+        st_h->buf_off -= total_written;
+        memmove(st_h->buf, st_h->buf + total_written, st_h->buf_off);
+    }
 
 end:
     lsquic_stream_flush(stream);
