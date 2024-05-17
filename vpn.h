@@ -38,7 +38,7 @@
 #define VERSION_STRING "0.1.4"
 #define DEFAULT_MTU 1500
 #define TIMEOUT (60 * 1000)
-#define BUFF_SIZE 8192
+#define BUFF_SIZE (1024*1024)
 #define IS_CLIENT 0
 #define IS_SERVER 1
 #define MAX_TUN_SUM 10
@@ -66,9 +66,7 @@ typedef struct vpn_ctx_s {
     int           firewall_rules_set;
     int           addr_index;
     char * packet_buf;
-    char * buf;
-    char          buf_1[BUFF_SIZE];
-    char          buf_2[BUFF_SIZE];
+    char          buf[BUFF_SIZE];
     size_t        buf_off;
     vpn_t         * vpn;
 } vpn_ctx_t;
@@ -76,6 +74,7 @@ typedef struct vpn_ctx_s {
 int addr_init(vpn_t *vpn, int tun_sum);
 int vpn_init(vpn_ctx_t *vpn, int server_flag);
 void vpn_tun_write(vpn_ctx_t *vpn_ctx);
+size_t vpn_tun_read(int fd, char *buf, size_t buf_off);
 extern volatile sig_atomic_t exit_signal_received;
 
 #endif

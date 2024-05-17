@@ -73,25 +73,16 @@ struct lsquic_stream_ctx {
 };
 
 
-static void tun_read_handler(int fd, short event, void *ctx){
-    size_t              len, llen;
-    lsquic_stream_ctx_t *st_h = ctx;
-    char *cur_buf;
 
-    cur_buf = st_h->buf + st_h->buf_off;
-    len = tun_read(fd, cur_buf, BUFF_SIZE);
-    if (len <= 0) {
-        LSQ_WARN("tun_read error: %zu", len);
-        return;
-    }else if(len > DEFAULT_MTU){
-        LSQ_WARN("The data read（%zu） is greater than mtu(%d)", len, DEFAULT_MTU);
+static void tun_read_handler(int fd, short event, void *ctx){
+    size_t len;
+    lsquic_stream_ctx_t *st_h = ctx;
+    len = vpn_tun_read(fd, st_h->buf, st_h->buf_off);
+    if(len <= 0){
         return;
     }
-
-    llen = htonl(len);
-    memcpy(st_h->buf, &llen, VPN_HEAD_SIZE);
-    st_h->buf_off = st_h->buf_off + len;
-    LSQ_INFO("read from tun [%s]: %zu bytes", st_h->client_ctx->vpn_ctx->if_name, len);
+    
+    st_h->buf_off = len;
 
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->client_ctx->prog->prog_engine);
@@ -141,7 +132,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 
     len = lsquic_stream_read(stream, cur_buf, BUFF_SIZE - buf_used);
-    if (len < 0)
+    if (len <= 0)
     {
         lsquic_stream_shutdown(stream, 2);
         exit(1);
@@ -189,8 +180,20 @@ vpn_client_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
     len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
     LSQ_INFO("write to client %llu: %zd bytes", lsquic_stream_id(stream), len);
-    st_h->buf_off = VPN_HEAD_SIZE;
 
+    if(len<=0){
+        goto end;
+    }
+
+    if(len == st_h->buf_off){
+        st_h->buf_off = 0;
+        goto end;
+    }
+    
+    st_h->buf_off = st_h->buf_off - len;
+    memmove(st_h->buf, st_h->buf + len, st_h->buf_off);
+
+end:
     lsquic_stream_flush(stream);
     lsquic_stream_wantwrite(stream, 0);
     lsquic_stream_wantread(stream, 1);
@@ -248,7 +251,6 @@ main (int argc, char **argv)
     vpn_ctx.tun_fd = -1;
     client_ctx.prog = &prog;
     client_ctx.vpn_ctx = &vpn_ctx;
-    client_ctx.vpn_ctx->buf = vpn_ctx.buf_1;
     client_ctx.vpn_ctx->packet_buf = vpn_ctx.buf;
     client_ctx.vpn_ctx->buf_off = 0;
 

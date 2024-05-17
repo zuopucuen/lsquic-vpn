@@ -83,25 +83,15 @@ struct lsquic_stream_ctx {
 };
 
 static void tun_read_handler(int fd, short event, void *ctx){
-    size_t              len, llen;
+    size_t len;
     lsquic_stream_ctx_t *st_h = ctx;
-    vpn_ctx_t *vpn;
-    char * cur_buf;
-    
-    cur_buf = st_h->buf + st_h->buf_off;
-    len = tun_read(fd, cur_buf, BUFF_SIZE);
-    if (len <= 0) {
-        LSQ_WARN("tun_read error: %zd", len);
-        return;
-    }else if(len > DEFAULT_MTU){
-        LSQ_WARN("The data read（%zu） is greater than mtu(%d)", len, DEFAULT_MTU);
+
+    len = vpn_tun_read(fd, st_h->buf, st_h->buf_off);
+    if(len <= 0){
         return;
     }
-
-    llen = htonl(len);
-    memcpy(st_h->buf, &llen, VPN_HEAD_SIZE);
-    st_h->buf_off = st_h->buf_off + len;
-    LSQ_INFO("read from tun [%s] %zu bytes", st_h->vpn_ctx->if_name, len);
+    
+    st_h->buf_off = len;
 
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->server_ctx->prog->prog_engine);
@@ -122,14 +112,13 @@ vpn_server_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     vpn_ctx->tun_fd = -1;
     vpn_ctx->addr_index = -1;
     vpn_ctx->vpn = server_ctx->vpn;
-    vpn_ctx->buf = vpn_ctx->buf_1;
     vpn_ctx->packet_buf = vpn_ctx->buf;
     vpn_ctx->buf_off = 0;
 
     st_h->stream = stream;
     st_h->server_ctx = server_ctx;
     st_h->vpn_ctx = vpn_ctx;
-    st_h->buf_off = 1;
+    st_h->buf_off = 0;
 
     lsquic_stream_wantread(stream, 1);
 
@@ -230,11 +219,24 @@ static void
 vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     struct lsquic_conn_ctx *conn_h;
-    ssize_t len;
+    size_t len;
 
     len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
     LSQ_INFO("write to client %llu: %zd bytes", lsquic_stream_id(stream), len);
-    st_h->buf_off = VPN_HEAD_SIZE;
+
+    if(len<=0){
+        goto end;
+    }
+
+    if(len == st_h->buf_off){
+        st_h->buf_off = 0;
+        goto end;
+    }
+    
+    st_h->buf_off = st_h->buf_off - len;
+    memmove(st_h->buf, st_h->buf + len, st_h->buf_off);
+    
+end:
     lsquic_stream_flush(stream);
     lsquic_stream_wantwrite(stream, 0);
     lsquic_stream_wantread(stream, 1);
