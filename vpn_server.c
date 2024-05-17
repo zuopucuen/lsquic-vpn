@@ -164,7 +164,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
 
     len = lsquic_stream_read(stream, cur_buf, BUFF_SIZE - buf_used);
-    if (0 == len)
+    if (len <= 0)
     {
         goto end;
     }

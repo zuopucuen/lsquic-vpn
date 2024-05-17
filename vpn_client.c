@@ -103,8 +103,8 @@ static void
 vpn_client_after_new_stream(lsquic_stream_ctx_t * st_h){
     char hello[] = "Hello";
 
-    memcpy(&(st_h->buf[1]), hello, sizeof(hello) + 1);
-    st_h->buf_off = st_h->buf_off + sizeof(hello) + 1;
+    memcpy(&(st_h->buf[1]), hello, sizeof(hello));
+    st_h->buf_off = st_h->buf_off + sizeof(hello);
 
     lsquic_stream_wantwrite(st_h->stream, 1);
 }
@@ -136,11 +136,15 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     cur_buf = vpn_ctx->packet_buf + vpn_ctx->buf_off;
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
 
+    if((BUFF_SIZE - buf_used) <=1){
+        exit(1);
+    }
+
     len = lsquic_stream_read(stream, cur_buf, BUFF_SIZE - buf_used);
     if (len <= 0)
     {
         lsquic_stream_shutdown(stream, 2);
-        return;
+        exit(1);
     }
 
     LSQ_INFO("read from stream %llu: %zd bytes, bufsize: %zu", lsquic_stream_id(stream), len, BUFF_SIZE - buf_used);

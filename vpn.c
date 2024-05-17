@@ -91,6 +91,8 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
         }else{
             break;
         }
+
+        LSQ_INFO("last packet size: %zu, buf_off: %zu", packet_size, vpn_ctx->buf_off);
     }
 
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
