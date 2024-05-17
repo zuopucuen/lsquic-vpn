@@ -65,3 +65,37 @@ int addr_init(vpn_t *vpn, int tun_sum) {
 
     return 1;
 }
+
+void
+vpn_tun_write(vpn_ctx_t *vpn_ctx){
+    size_t packet_size, buf_used;
+
+    memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
+    packet_size = ntohl(packet_size);
+
+    while(0 < packet_size  &&  packet_size <= (vpn_ctx->buf_off - VPN_HEAD_SIZE)){   
+         LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
+
+        if (tun_write(vpn_ctx->tun_fd, vpn_ctx->packet_buf + VPN_HEAD_SIZE, packet_size) != packet_size) {
+            LSQ_ERROR("twrite to tun faile");
+        }else{
+            LSQ_INFO("write to tun  %zu bytes",  packet_size);
+        }
+
+        vpn_ctx->buf_off = vpn_ctx->buf_off - packet_size - VPN_HEAD_SIZE;
+        vpn_ctx->packet_buf = vpn_ctx->packet_buf + packet_size + VPN_HEAD_SIZE;
+        if(vpn_ctx->buf_off  > VPN_HEAD_SIZE) {
+            memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
+            packet_size = ntohl(packet_size);
+        }else{
+            break;
+        }
+    }
+
+    buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
+    if (sizeof(vpn_ctx->buf) - buf_used < DEFAULT_MTU)
+    {
+        memcpy(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
+        vpn_ctx->packet_buf = vpn_ctx->buf;
+    }
+}

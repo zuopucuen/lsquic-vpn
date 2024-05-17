@@ -148,7 +148,6 @@ find_conn_h (const struct vpn_server_ctx *server_ctx, lsquic_stream_t *stream)
     return NULL;
 }
 
-
 static void
 vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
@@ -156,7 +155,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_ctx_t *vpn_ctx;
     vpn_t *vpn;
     vpn_tun_addr_t *addr;
-    size_t addr_index, len, packet_size, buf_used;
+    size_t addr_index, len, buf_used;
     char * cur_buf;
 
     vpn_ctx = st_h->vpn_ctx;
@@ -170,7 +169,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         goto end;
     }
 
-    LSQ_INFO("read from client %llu: %zd bytes", lsquic_stream_id(stream), len);
+    LSQ_INFO("read from stream %llu: %zd bytes, bufsize: %zu", lsquic_stream_id(stream), len, BUFF_SIZE - buf_used);
     
     if(vpn_ctx->tun_fd == -1){
         LSQ_INFO("say Hello: %s", cur_buf+1);
@@ -213,33 +212,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 
     vpn_ctx->buf_off = vpn_ctx->buf_off + len;
-    memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
-    packet_size = ntohl(packet_size);
-    //LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
-    while(0 < packet_size  &&  packet_size < (vpn_ctx->buf_off - VPN_HEAD_SIZE)){   
-         LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);    
-        if (tun_write(vpn_ctx->tun_fd, vpn_ctx->packet_buf + VPN_HEAD_SIZE, packet_size) != packet_size) {
-            LSQ_ERROR("twrite to tun [%s] faile", st_h->vpn_ctx->if_name);
-        }else{
-            LSQ_INFO("write to tun [%s] %zu bytes", st_h->vpn_ctx->if_name, packet_size);
-        }
-        vpn_ctx->buf_off = vpn_ctx->buf_off - packet_size - VPN_HEAD_SIZE;
-        LSQ_WARN("buf_ofF: %zu", vpn_ctx->buf_off );
-        vpn_ctx->packet_buf = vpn_ctx->packet_buf + packet_size + VPN_HEAD_SIZE;
-        if(vpn_ctx->buf_off  > VPN_HEAD_SIZE) {
-            memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
-            packet_size = ntohl(packet_size);
-        }else{
-            break;
-        }
-    }
-
-    buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
-    if (BUFF_SIZE - buf_used < DEFAULT_MTU)
-    {
-        memcpy(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
-        vpn_ctx->packet_buf = vpn_ctx->buf;
-    }
+    vpn_tun_write(vpn_ctx);
 
 out:
     lsquic_stream_wantread(stream, 1);

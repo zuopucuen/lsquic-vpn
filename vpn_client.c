@@ -143,7 +143,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         return;
     }
 
-    LSQ_INFO("read from server %llu: %zd bytes, bufsize: %zu", lsquic_stream_id(stream), len, BUFF_SIZE - buf_used);
+    LSQ_INFO("read from stream %llu: %zd bytes, bufsize: %zu", lsquic_stream_id(stream), len, BUFF_SIZE - buf_used);
 
     if(vpn_ctx->tun_fd == -1){
         vpn_ctx->local_tun_ip = cur_buf;
@@ -166,33 +166,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
     
     vpn_ctx->buf_off = vpn_ctx->buf_off + len;
-    memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
-    packet_size = ntohl(packet_size);
-
-    //LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
-
-    while(0 < packet_size  &&  packet_size < (vpn_ctx->buf_off - VPN_HEAD_SIZE)){
-        LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
-        if ( tun_write(vpn_ctx->tun_fd, vpn_ctx->packet_buf + VPN_HEAD_SIZE, packet_size) != packet_size) {
-            LSQ_ERROR("twrite to tun [%s] faile", vpn_ctx->if_name);
-        }else{
-            LSQ_INFO("write to tun [%s] %zu bytes", vpn_ctx->if_name, packet_size);
-        }
-        vpn_ctx->buf_off = vpn_ctx->buf_off - packet_size - VPN_HEAD_SIZE;
-        vpn_ctx->packet_buf = vpn_ctx->packet_buf + packet_size + VPN_HEAD_SIZE;
-        if(vpn_ctx->buf_off  > VPN_HEAD_SIZE) {
-            memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
-            packet_size = ntohl(packet_size);
-        }else{
-            break;
-        }
-    }
-
-    buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
-    if (BUFF_SIZE - buf_used < DEFAULT_MTU)
-    {
-        memcpy(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
-    }
+    vpn_tun_write(vpn_ctx);
 
 end:
     event_add(st_h->read_tun_ev, NULL);
@@ -228,7 +202,6 @@ vpn_client_on_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         event_del(st_h->read_tun_ev);
         event_free(st_h->read_tun_ev);
     }
-    free(st_h);
     lsquic_conn_close(lsquic_stream_conn(stream));
 }
 
