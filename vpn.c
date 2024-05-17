@@ -78,6 +78,7 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
 
         if (tun_write(vpn_ctx->tun_fd, vpn_ctx->packet_buf + VPN_HEAD_SIZE, packet_size) != packet_size) {
             LSQ_ERROR("twrite to tun faile");
+            break;
         }else{
             LSQ_INFO("write to tun  %zu bytes",  packet_size);
         }
@@ -95,7 +96,7 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
     if (sizeof(vpn_ctx->buf) - buf_used < DEFAULT_MTU)
     {
-        memcpy(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
+        memmove(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
         vpn_ctx->packet_buf = vpn_ctx->buf;
     }
 }
