@@ -95,13 +95,8 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
         LSQ_INFO("last packet size: %zu, buf_off: %zu", packet_size, vpn_ctx->buf_off);
     }
 
-    buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
-
-    if (BUFF_SIZE < DEFAULT_MTU + buf_used)
-    {
-        memmove(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
-        vpn_ctx->packet_buf = vpn_ctx->buf;
-    }
+    memmove(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
+    vpn_ctx->packet_buf = vpn_ctx->buf;
 }
 
 size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
