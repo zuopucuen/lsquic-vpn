@@ -38,7 +38,7 @@
 #define VERSION_STRING "0.1.4"
 #define DEFAULT_MTU 1500
 #define TIMEOUT (60 * 1000)
-#define BUFF_SIZE 4096
+#define BUFF_SIZE (512 * 1024)
 #define IS_CLIENT 0
 #define IS_SERVER 1
 #define MAX_TUN_SUM 10

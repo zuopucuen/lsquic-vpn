@@ -78,11 +78,10 @@ static void tun_read_handler(int fd, short event, void *ctx){
     size_t len;
     lsquic_stream_ctx_t *st_h = ctx;
     len = vpn_tun_read(fd, st_h->buf, st_h->buf_off);
-    if(len <= 0){
-        return;
+
+    if(len > 0){
+        st_h->buf_off = len;
     }
-    
-    st_h->buf_off = len;
 
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->client_ctx->prog->prog_engine);

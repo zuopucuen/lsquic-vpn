@@ -109,7 +109,7 @@ size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
     char *cur_buf;
 
     if(BUFF_SIZE <= buf_off + VPN_HEAD_SIZE){
-        return -1;
+        return 0;
     }
 
     LSQ_INFO("tun read free buf: %zu", BUFF_SIZE - buf_off - VPN_HEAD_SIZE);
@@ -117,11 +117,11 @@ size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
     len = tun_read(fd, cur_buf, BUFF_SIZE - buf_off - VPN_HEAD_SIZE);
     if (len <= 0) {
         LSQ_WARN("tun_read error: %zu", len);
-        return -1;
+        return 0;
     }else if(len > DEFAULT_MTU){
         LSQ_WARN("The data read(%zu) is greater than mtu(%d)", len, DEFAULT_MTU);
         exit(1);
-        return -1;
+        return 0;
     }
     cur_buf -= VPN_HEAD_SIZE;
     llen = htons(len);
