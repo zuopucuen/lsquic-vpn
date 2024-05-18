@@ -220,9 +220,8 @@ vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     size_t len;
     size_t total_written = 0;
-
     while (total_written < st_h->buf_off) {
-        len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
+        len = lsquic_stream_write(stream, st_h->buf + total_written , st_h->buf_off - total_written);
 
         if(len == 0){
             break;
@@ -234,7 +233,7 @@ vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             }
 
             LSQ_ERROR("Error writing to stream: %s\n", strerror(err));
-            lsquic_conn_abort(lsquic_stream_conn(stream));
+            lsquic_conn_close(lsquic_stream_conn(stream));
             return;
         } 
         
@@ -242,10 +241,8 @@ vpn_server_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         total_written += len;
     }
 
-    if (total_written == st_h->buf_off) {
-        st_h->buf_off = 0;
-    } else if(total_written > 0) {
-        st_h->buf_off -= total_written;
+    st_h->buf_off -= total_written;
+    if(st_h->buf_off > 0){
         memmove(st_h->buf, st_h->buf + total_written, st_h->buf_off);
     }
 

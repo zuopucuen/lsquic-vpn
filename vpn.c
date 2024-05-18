@@ -71,10 +71,10 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
     size_t packet_size, buf_used;
 
     memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
-    packet_size = ntohl(packet_size);
-   
+    packet_size = ntohs(packet_size);
+    LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
     while(0 < packet_size  &&  packet_size <= (vpn_ctx->buf_off - VPN_HEAD_SIZE)){   
-         LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
+        LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
 
         if (tun_write(vpn_ctx->tun_fd, vpn_ctx->packet_buf + VPN_HEAD_SIZE, packet_size) != packet_size) {
             LSQ_ERROR("twrite to tun faile");
@@ -87,7 +87,7 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
         vpn_ctx->packet_buf = vpn_ctx->packet_buf + packet_size + VPN_HEAD_SIZE;
         if(vpn_ctx->buf_off  > VPN_HEAD_SIZE) {
             memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
-            packet_size = ntohl(packet_size);
+            packet_size = ntohs(packet_size);
         }else{
             break;
         }
@@ -96,7 +96,8 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
     }
 
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
-    if (BUFF_SIZE - buf_used < DEFAULT_MTU)
+
+    if (BUFF_SIZE < DEFAULT_MTU + buf_used)
     {
         memmove(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
         vpn_ctx->packet_buf = vpn_ctx->buf;
@@ -104,25 +105,26 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
 }
 
 size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
-    size_t              len, llen, free_size;
+    size_t              len, llen;
     char *cur_buf;
 
-    free_size = BUFF_SIZE - buf_off - VPN_HEAD_SIZE;
-    if(free_size <= 0 ){
+    if(BUFF_SIZE <= buf_off + VPN_HEAD_SIZE){
         return -1;
     }
 
+    LSQ_INFO("tun read free buf: %zu", BUFF_SIZE - buf_off - VPN_HEAD_SIZE);
     cur_buf = buf + buf_off + VPN_HEAD_SIZE;
-    len = tun_read(fd, cur_buf, free_size);
+    len = tun_read(fd, cur_buf, BUFF_SIZE - buf_off - VPN_HEAD_SIZE);
     if (len <= 0) {
         LSQ_WARN("tun_read error: %zu", len);
         return -1;
     }else if(len > DEFAULT_MTU){
         LSQ_WARN("The data read(%zu) is greater than mtu(%d)", len, DEFAULT_MTU);
+        exit(1);
         return -1;
     }
     cur_buf -= VPN_HEAD_SIZE;
-    llen = htonl(len);
+    llen = htons(len);
     memcpy(cur_buf, &llen, VPN_HEAD_SIZE);
     buf_off = buf_off + len + VPN_HEAD_SIZE;
     LSQ_INFO("read from tun: %zu bytes", len);

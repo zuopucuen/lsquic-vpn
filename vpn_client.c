@@ -176,7 +176,7 @@ vpn_client_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     size_t total_written = 0;
 
     while (total_written < st_h->buf_off) {
-        len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
+        len = lsquic_stream_write(stream, st_h->buf + total_written , st_h->buf_off - total_written);;
 
         if(len == 0){
             break;
@@ -188,7 +188,7 @@ vpn_client_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             }
 
             LSQ_ERROR("Error writing to stream: %s\n", strerror(err));
-            lsquic_conn_abort(lsquic_stream_conn(stream));
+            lsquic_conn_close(lsquic_stream_conn(stream));
             return;
         } 
         
