@@ -86,6 +86,11 @@ static void tun_read_handler(int fd, short event, void *ctx){
     size_t len;
     lsquic_stream_ctx_t *st_h = ctx;
 
+    LSQ_INFO("buf off before read tun: %zu bytes", st_h->buf_off);
+    if(st_h->buf_off + BUFF_SIZE/2 > BUFF_SIZE){
+        return;
+    }
+    
     len = vpn_tun_read(fd, st_h->buf, st_h->buf_off);
 
     if(len > 0){
