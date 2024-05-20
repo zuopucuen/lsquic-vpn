@@ -35,6 +35,16 @@
 #include <sys/sys_domain.h>
 #endif
 
+#include <event2/event.h>
+
+#include <lsquic.h>
+#include <lsquic_hash.h>
+#include <lsquic_logger.h>
+
+#include "common.h"
+#include "cert.h"
+#include "prog.h"
+
 #define VERSION_STRING "0.1.4"
 #define DEFAULT_MTU 1500
 #define TIMEOUT (60 * 1000)
@@ -71,10 +81,42 @@ typedef struct vpn_ctx_s {
     vpn_t         * vpn;
 } vpn_ctx_t;
 
+typedef struct lsquic_vpn_ctx_s {
+    TAILQ_HEAD(, lsquic_conn_ctx)   conn_ctxs;
+    struct lsquic_conn_ctx  *conn_h;
+    int n_conn;
+    struct sport_head sports;
+    struct prog *prog;
+    vpn_t *vpn;
+} lsquic_vpn_ctx_t;
+
+
+struct lsquic_conn_ctx {
+    TAILQ_ENTRY(lsquic_conn_ctx)    next_connh;
+    lsquic_conn_t       *conn;
+    lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
+    vpn_ctx_t           *vpn_ctx;
+    struct event        *read_tun_ev;
+};
+
+struct lsquic_stream_ctx {
+    lsquic_stream_t     *stream;
+    lsquic_conn_ctx_t   *conn_h;
+    lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
+    char                 buf[BUFF_SIZE];
+    size_t               buf_off;
+};
+
 int addr_init(vpn_t *vpn, int tun_sum);
 int vpn_init(vpn_ctx_t *vpn, int server_flag);
+void vpn_ctx_init(struct lsquic_conn_ctx   *conn_h);
 void vpn_tun_write(vpn_ctx_t *vpn_ctx);
 size_t vpn_tun_read(int fd, char *buf, size_t buf_off);
+void tun_read_handler(int fd, short event, void *ctx);
+void vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h);
+lsquic_stream_ctx_t *vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream);
+
 extern volatile sig_atomic_t exit_signal_received;
+extern void vpn_after_new_stream(lsquic_stream_ctx_t * st_h);
 
 #endif
