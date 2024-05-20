@@ -11,14 +11,16 @@ ssize_t safe_write(const int fd, const void *const buf_, size_t count, const int
 
     while (count > (size_t) 0) {
         while ((written = write(fd, buf, count)) < (ssize_t) 0) {
-            if (errno == EAGAIN) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 pfd.fd     = fd;
                 pfd.events = POLLOUT;
                 if (poll(&pfd, (nfds_t) 1, timeout) <= 0) {
                     return (ssize_t) -1;
                 }
             } else if (errno != EINTR) {
-                return (ssize_t) -1;
+                return (ssize_t) 0;
+            } else{
+                return -1;
             }
         }
         buf += written;
@@ -181,17 +183,9 @@ ssize_t tun_write(int fd, const void *data, size_t size)
     if (size < 20) {
         return 0;
     }
-    switch (*(const uint8_t *) data >> 4) {
-    case 4:
-        family = htonl(AF_INET);
-        break;
-    case 6:
-        family = htonl(AF_INET6);
-        break;
-    default:
-        errno = EINVAL;
-        return -1;
-    }
+
+    family = htonl(AF_INET);
+
     struct iovec iov[2] = {
         {
             .iov_base = &family,

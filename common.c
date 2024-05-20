@@ -21,10 +21,6 @@
 
 #include "config.h"
 
-#if HAVE_REGEX
-#include <regex.h>
-#endif
-
 #include <event2/event.h>
 
 #include <lsquic.h>
@@ -162,15 +158,7 @@ struct service_port *
 sport_new (const char *optarg, struct prog *prog)
 {
     struct service_port *const sport = calloc(1, sizeof(*sport));
-#if HAVE_REGEX
-    regex_t re;
-    regmatch_t matches[5];
-    int re_code;
-    const char *port_str;
-    char errbuf[80];
-#else
     char *port_str;
-#endif
     int port, e;
     const char *host;
     struct addrinfo hints, *res = NULL;
@@ -194,49 +182,7 @@ sport_new (const char *optarg, struct prog *prog)
     else
         sport->if_name[0] = '\0';
 #endif
-#if HAVE_REGEX
-    re_code = regcomp(&re, "^(.*):([0-9][0-9]*)$"
-                          "|^([0-9][0-9]*)$"
-                          "|^(..*)$"
-                                                    , REG_EXTENDED);
-    if (re_code != 0)
-    {
-        regerror(re_code, &re, errbuf, sizeof(errbuf));
-        LSQ_ERROR("cannot compile regex: %s", errbuf);
-        goto err;
-    }
-    if (0 != regexec(&re, addr, sizeof(matches) / sizeof(matches[0]),
-                                                            matches, 0))
-    {
-        LSQ_ERROR("Invalid argument `%s'", addr);
-        goto err;
-    }
-    if (matches[1].rm_so >= 0)
-    {
-        addr[ matches[1].rm_so + matches[1].rm_eo ] = '\0';
-        host = addr;
-        port_str = &addr[ matches[2].rm_so ];
-        port = atoi(port_str);
-    }
-    else if (matches[3].rm_so >= 0)
-    {
-        if (!prog->prog_hostname)
-        {
-            LSQ_ERROR("hostname is not specified");
-            goto err;
-        }
-        host = prog->prog_hostname;
-        port_str = &addr[ matches[3].rm_so ];
-        port = atoi(port_str);
-    }
-    else
-    {
-        assert(matches[4].rm_so >= 0);
-        host = addr;
-        port_str = "443";
-        port = 443;
-    }
-#else
+
     host = addr;
     port_str = strrchr(addr, ':');
     if (port_str)
@@ -249,7 +195,7 @@ sport_new (const char *optarg, struct prog *prog)
         port_str = "443";
         port = 443;
     }
-#endif
+
     assert(host);
     LSQ_DEBUG("host: %s; port: %d", host, port);
     if (strlen(host) > sizeof(sport->host) - 1)
@@ -293,10 +239,6 @@ sport_new (const char *optarg, struct prog *prog)
             prog->prog_hostname = sport->host;
     }
 
-#if HAVE_REGEX
-    if (0 == re_code)
-        regfree(&re);
-#endif
     if (res)
         freeaddrinfo(res);
     free(addr);
@@ -304,10 +246,6 @@ sport_new (const char *optarg, struct prog *prog)
     return sport;
 
   err:
-#if HAVE_REGEX
-    if (0 == re_code)
-        regfree(&re);
-#endif
     if (res)
         freeaddrinfo(res);
     free(sport);
@@ -378,15 +316,6 @@ proc_ancillary (
             memcpy(ecn, CMSG_DATA(cmsg), sizeof(*ecn));
             *ecn &= IPTOS_ECN_MASK;
         }
-#ifdef __FreeBSD__
-        else if (cmsg->cmsg_level == IPPROTO_IP
-                                            && cmsg->cmsg_type == IP_RECVTOS)
-        {
-            unsigned char tos;
-            memcpy(&tos, CMSG_DATA(cmsg), sizeof(tos));
-            *ecn = tos & IPTOS_ECN_MASK;
-        }
-#endif
 #endif
     }
 }
@@ -742,10 +671,8 @@ sport_init_server (struct service_port *sport, struct lsquic_engine *engine,
         s = setsockopt(sockfd, IPPROTO_IP,
 #if __linux__ && defined(IP_RECVORIGDSTADDR)
                                            IP_RECVORIGDSTADDR,
-#elif __linux__ || __APPLE__ || defined(WIN32)
+#elif __linux__ || __APPLE__ 
                                            IP_PKTINFO,
-#else
-                                           IP_RECVDSTADDR,
 #endif
                                                                CHAR_CAST &on, sizeof(on));
     else
@@ -1546,393 +1473,6 @@ sport_packets_out (void *ctx, const struct lsquic_out_spec *specs,
 #endif
         return send_packets_one_by_one(specs, count);
 }
-
-
-int
-set_engine_option (struct lsquic_engine_settings *settings,
-                   int *version_cleared, const char *name)
-{
-    int len;
-    const char *val = strchr(name, '=');
-    if (!val)
-        return -1;
-    len = val - name;
-    ++val;
-
-    switch (len)
-    {
-    case 2:
-        if (0 == strncmp(name, "ua", 2))
-        {
-            settings->es_ua = val;
-            return 0;
-        }
-        break;
-    case 3:
-        if (0 == strncmp(name, "ecn", 1))
-        {
-            settings->es_ecn = atoi(val);
-#if !ECN_SUPPORTED
-            if (settings->es_ecn)
-            {
-                LSQ_ERROR("ECN is not supported on this platform");
-                break;
-            }
-#endif
-            return 0;
-        }
-        break;
-    case 4:
-        if (0 == strncmp(name, "cfcw", 4))
-        {
-            settings->es_cfcw = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "sfcw", 4))
-        {
-            settings->es_sfcw = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "spin", 4))
-        {
-            settings->es_spin = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "srej", 4))
-        {
-            settings->es_support_srej = atoi(val);
-            return 0;
-        }
-        break;
-    case 7:
-        if (0 == strncmp(name, "version", 7))
-        {
-            if (!*version_cleared)
-            {
-                *version_cleared = 1;
-                settings->es_versions = 0;
-            }
-            enum lsquic_version ver = lsquic_str2ver(val, strlen(val));
-            if ((unsigned) ver < N_LSQVER)
-            {
-                settings->es_versions |= 1 << ver;
-                return 0;
-            }
-            ver = lsquic_alpn2ver(val, strlen(val));
-            if ((unsigned) ver < N_LSQVER)
-            {
-                settings->es_versions |= 1 << ver;
-                return 0;
-            }
-        }
-        else if (0 == strncmp(name, "rw_once", 7))
-        {
-            settings->es_rw_once = atoi(val);
-            return 0;
-        }
-        else if (0 == strncmp(name, "cc_algo", 7))
-        {
-            settings->es_cc_algo = atoi(val);
-            return 0;
-        }
-        else if (0 == strncmp(name, "ql_bits", 7))
-        {
-            settings->es_ql_bits = atoi(val);
-            return 0;
-        }
-        break;
-    case 8:
-        if (0 == strncmp(name, "max_cfcw", 8))
-        {
-            settings->es_max_cfcw = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "max_sfcw", 8))
-        {
-            settings->es_max_sfcw = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "scid_len", 8))
-        {
-            settings->es_scid_len = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "dplpmtud", 8))
-        {
-            settings->es_dplpmtud = atoi(val);
-            return 0;
-        }
-        break;
-    case 9:
-        if (0 == strncmp(name, "send_prst", 9))
-        {
-            settings->es_send_prst = atoi(val);
-            return 0;
-        }
-        break;
-    case 10:
-        if (0 == strncmp(name, "honor_prst", 10))
-        {
-            settings->es_honor_prst = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "timestamps", 10))
-        {
-            settings->es_timestamps = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "max_plpmtu", 10))
-        {
-            settings->es_max_plpmtu = atoi(val);
-            return 0;
-        }
-        break;
-    case 11:
-        if (0 == strncmp(name, "ping_period", 11))
-        {
-            settings->es_ping_period = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "base_plpmtu", 11))
-        {
-            settings->es_base_plpmtu = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ptpc_target", 11))
-        {
-            settings->es_ptpc_target = atof(val);
-            return 0;
-        }
-        break;
-    case 12:
-        if (0 == strncmp(name, "idle_conn_to", 12))
-        {
-            settings->es_idle_conn_to = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "idle_timeout", 12))
-        {
-            settings->es_idle_timeout = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "silent_close", 12))
-        {
-            settings->es_silent_close = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "support_push", 12))
-        {
-            settings->es_support_push = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "support_nstp", 12))
-        {
-            settings->es_support_nstp = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "pace_packets", 12))
-        {
-            settings->es_pace_packets = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "handshake_to", 12))
-        {
-            settings->es_handshake_to = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "support_srej", 12))
-        {
-            settings->es_support_srej = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "delayed_acks", 12))
-        {
-            settings->es_delayed_acks = atoi(val);
-            return 0;
-        }
-        break;
-    case 13:
-        if (0 == strncmp(name, "support_tcid0", 13))
-        {
-            settings->es_support_tcid0 = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "init_max_data", 13))
-        {
-            settings->es_init_max_data = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "scid_iss_rate", 13))
-        {
-            settings->es_scid_iss_rate = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ext_http_prio", 13))
-        {
-            settings->es_ext_http_prio = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ptpc_int_gain", 13))
-        {
-            settings->es_ptpc_int_gain = atof(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "delay_onclose", 13))
-        {
-            settings->es_delay_onclose = atoi(val);
-            return 0;
-        }
-        break;
-    case 14:
-        if (0 == strncmp(name, "max_streams_in", 14))
-        {
-            settings->es_max_streams_in = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "progress_check", 14))
-        {
-            settings->es_progress_check = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ptpc_prop_gain", 14))
-        {
-            settings->es_ptpc_prop_gain = atof(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "max_batch_size", 14))
-        {
-            settings->es_max_batch_size = atoi(val);
-            return 0;
-        }
-        break;
-    case 15:
-        if (0 == strncmp(name, "allow_migration", 15))
-        {
-            settings->es_allow_migration = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "grease_quic_bit", 15))
-        {
-            settings->es_grease_quic_bit = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ptpc_dyn_target", 15))
-        {
-            settings->es_ptpc_dyn_target = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ptpc_err_thresh", 15))
-        {
-            settings->es_ptpc_err_thresh = atof(val);
-            return 0;
-        }
-        break;
-    case 16:
-        if (0 == strncmp(name, "proc_time_thresh", 16))
-        {
-            settings->es_proc_time_thresh = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "qpack_experiment", 16))
-        {
-            settings->es_qpack_experiment = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ptpc_periodicity", 16))
-        {
-            settings->es_ptpc_periodicity = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ptpc_max_packtol", 16))
-        {
-            settings->es_ptpc_max_packtol = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "ptpc_err_divisor", 16))
-        {
-            settings->es_ptpc_err_divisor = atof(val);
-            return 0;
-        }
-        break;
-    case 18:
-        if (0 == strncmp(name, "qpack_enc_max_size", 18))
-        {
-            settings->es_qpack_enc_max_size = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "qpack_dec_max_size", 18))
-        {
-            settings->es_qpack_dec_max_size = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "noprogress_timeout", 18))
-        {
-            settings->es_noprogress_timeout = atoi(val);
-            return 0;
-        }
-        break;
-    case 20:
-        if (0 == strncmp(name, "max_header_list_size", 20))
-        {
-            settings->es_max_header_list_size = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "init_max_streams_uni", 20))
-        {
-            settings->es_init_max_streams_uni = atoi(val);
-            return 0;
-        }
-        break;
-    case 21:
-        if (0 == strncmp(name, "qpack_enc_max_blocked", 21))
-        {
-            settings->es_qpack_enc_max_blocked = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "qpack_dec_max_blocked", 21))
-        {
-            settings->es_qpack_dec_max_blocked = atoi(val);
-            return 0;
-        }
-        if (0 == strncmp(name, "init_max_streams_bidi", 21))
-        {
-            settings->es_init_max_streams_bidi = atoi(val);
-            return 0;
-        }
-        break;
-    case 23:
-        if (0 == strncmp(name, "max_udp_payload_size_rx", 23))
-        {
-            settings->es_max_udp_payload_size_rx = atoi(val);
-            return 0;
-        }
-        break;
-    case 24:
-        if (0 == strncmp(name, "init_max_stream_data_uni", 24))
-        {
-            settings->es_init_max_stream_data_uni = atoi(val);
-            return 0;
-        }
-        break;
-    case 31:
-        if (0 == strncmp(name, "init_max_stream_data_bidi_local", 31))
-        {
-            settings->es_init_max_stream_data_bidi_local = atoi(val);
-            return 0;
-        }
-        break;
-    case 32:
-        if (0 == strncmp(name, "init_max_stream_data_bidi_remote", 32))
-        {
-            settings->es_init_max_stream_data_bidi_remote = atoi(val);
-            return 0;
-        }
-        break;
-    }
-
-    return -1;
-}
-
 
 /* So that largest allocation in PBA fits in 4KB */
 #define PBA_SIZE_MAX 0x1000
