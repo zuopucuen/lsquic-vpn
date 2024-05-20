@@ -28,7 +28,7 @@ vpn_client_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
     conn_h->lsquic_vpn_ctx = lsquic_vpn_ctx;
     lsquic_vpn_ctx->conn_h = conn_h;
 
-    vpn_ctx_init(conn_h);
+    lsquic_conn_ctx_init(conn_h);
 
     lsquic_conn_make_stream(conn);
     return conn_h;

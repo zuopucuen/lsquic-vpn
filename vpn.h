@@ -45,10 +45,9 @@
 #include "cert.h"
 #include "prog.h"
 
-#define VERSION_STRING "0.1.4"
 #define DEFAULT_MTU 1500
 #define TIMEOUT (60 * 1000)
-#define BUFF_SIZE (8 * 1024)
+#define BUFF_SIZE 65536
 #define IS_CLIENT 0
 #define IS_SERVER 1
 #define MAX_TUN_SUM 10
@@ -97,6 +96,7 @@ struct lsquic_conn_ctx {
     lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
     vpn_ctx_t           *vpn_ctx;
     struct event        *read_tun_ev;
+    struct event        *write_tun_ev;
 };
 
 struct lsquic_stream_ctx {
@@ -109,12 +109,13 @@ struct lsquic_stream_ctx {
 
 int addr_init(vpn_t *vpn, int tun_sum);
 int vpn_init(vpn_ctx_t *vpn, int server_flag);
-void vpn_ctx_init(struct lsquic_conn_ctx   *conn_h);
+void lsquic_conn_ctx_init(struct lsquic_conn_ctx   *conn_h);
 void vpn_tun_write(vpn_ctx_t *vpn_ctx);
 size_t vpn_tun_read(int fd, char *buf, size_t buf_off);
 void tun_read_handler(int fd, short event, void *ctx);
 void vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h);
 lsquic_stream_ctx_t *vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream);
+void vpn_stream_handler(int fd, short event, void *ctx);
 
 extern volatile sig_atomic_t exit_signal_received;
 extern void vpn_after_new_stream(lsquic_stream_ctx_t * st_h);

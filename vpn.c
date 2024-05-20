@@ -38,7 +38,7 @@ int vpn_init(vpn_ctx_t *vpn, int server_flag) {
     return 1;
 }
 
-void vpn_ctx_init(struct lsquic_conn_ctx  *conn_h){
+void lsquic_conn_ctx_init(struct lsquic_conn_ctx  *conn_h){
     vpn_ctx_t *vpn_ctx = malloc(sizeof(*vpn_ctx));
     lsquic_vpn_ctx_t *lsquic_vpn_ctx = conn_h->lsquic_vpn_ctx;
    
@@ -146,14 +146,11 @@ void tun_read_handler(int fd, short event, void *ctx){
     lsquic_conn_ctx_t *conn_h = st_h->conn_h;
 
     LSQ_INFO("buf off before read tun: %zu bytes", st_h->buf_off);
-    if(st_h->buf_off + BUFF_SIZE/2 < BUFF_SIZE){
-        len = vpn_tun_read(fd, st_h->buf, st_h->buf_off);
+    len = vpn_tun_read(fd, st_h->buf, st_h->buf_off);
 
-        if(len > 0){
-            st_h->buf_off = len;
-        }
+    if(len > 0){
+        st_h->buf_off = len;
     }
-
 
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
@@ -186,6 +183,11 @@ vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     return st_h;
 }
 
+void vpn_stream_handler(int fd, short event, void *ctx){
+    lsquic_stream_ctx_t *st_h = ctx;
+    lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
+}
+
 void
 vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
@@ -200,6 +202,7 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             int err = errno;
             if (err == EWOULDBLOCK || err == EAGAIN) {
                 LSQ_WARN("Stream not ready for writing, try again later\n");
+                event_add(st_h->conn_h->write_tun_ev, NULL);
                 break;
             }
 
@@ -215,9 +218,10 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     st_h->buf_off -= total_written;
     if(st_h->buf_off > 0){
         memmove(st_h->buf, st_h->buf + total_written, st_h->buf_off);
+    } else {
+        lsquic_stream_wantwrite(stream, 0);
+        lsquic_stream_wantread(stream, 1);
     }
 
     lsquic_stream_flush(stream);
-    lsquic_stream_wantwrite(stream, 0);
-    lsquic_stream_wantread(stream, 1);
 }

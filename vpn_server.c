@@ -22,7 +22,7 @@ vpn_server_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
     lsquic_conn_ctx_t *conn_h = calloc(1, sizeof(*conn_h));
     conn_h->conn = conn;
     conn_h->lsquic_vpn_ctx = lsquic_vpn_ctx;
-    vpn_ctx_init(conn_h);
+    lsquic_conn_ctx_init(conn_h);
 
     TAILQ_INSERT_TAIL(&lsquic_vpn_ctx->conn_ctxs, conn_h, next_connh);
     LSQ_NOTICE("New connection!");
@@ -92,8 +92,10 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_ctx_t *vpn_ctx;
     vpn_t *vpn;
     vpn_tun_addr_t *addr;
+    struct service_port *sport;
     size_t addr_index, len, buf_used;
     char * cur_buf;
+    int fd;
 
     conn_h = st_h->conn_h;
     vpn_ctx = conn_h->vpn_ctx;
@@ -144,6 +146,11 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         vpn->addrs[addr_index]->is_used = 1;
         conn_h->read_tun_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+
+        sport = TAILQ_FIRST(st_h->lsquic_vpn_ctx->prog->prog_sports);
+        conn_h->write_tun_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
+                                   sport->fd, EV_WRITE, vpn_stream_handler, st_h);
+
         event_add(conn_h->read_tun_ev, NULL);
 
         goto out;
