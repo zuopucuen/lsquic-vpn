@@ -92,7 +92,6 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_ctx_t *vpn_ctx;
     vpn_t *vpn;
     vpn_tun_addr_t *addr;
-    struct service_port *sport;
     size_t addr_index, len, buf_used;
     char * cur_buf;
     int fd;
@@ -146,10 +145,6 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         vpn->addrs[addr_index]->is_used = 1;
         conn_h->read_tun_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
-
-        sport = TAILQ_FIRST(st_h->lsquic_vpn_ctx->prog->prog_sports);
-        conn_h->write_tun_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
-                                   sport->fd, EV_WRITE, vpn_stream_handler, st_h);
 
         event_add(conn_h->read_tun_ev, NULL);
 

@@ -85,7 +85,6 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
 
     memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
     packet_size = ntohs(packet_size);
-    LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
     while(0 < packet_size  &&  packet_size <= (vpn_ctx->buf_off - VPN_HEAD_SIZE)){   
         LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
 
@@ -115,10 +114,6 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
 size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
     size_t              len, llen;
     char *cur_buf;
-
-    if(BUFF_SIZE <= buf_off + VPN_HEAD_SIZE){
-        return 0;
-    }
 
     LSQ_INFO("tun read free buf: %zu", BUFF_SIZE - buf_off - VPN_HEAD_SIZE);
     cur_buf = buf + buf_off + VPN_HEAD_SIZE;
@@ -155,7 +150,7 @@ void tun_read_handler(int fd, short event, void *ctx){
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
 
-    event_add(conn_h->read_tun_ev, NULL);
+    //event_add(conn_h->read_tun_ev, NULL);
 }
 
 lsquic_stream_ctx_t *
@@ -165,6 +160,7 @@ vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     lsquic_stream_ctx_t *st_h;
     lsquic_conn_t *conn;
     lsquic_conn_ctx_t *conn_h;
+    struct service_port *sport;
 
     lsquic_vpn_ctx = stream_if_ctx;
     st_h = malloc(sizeof(*st_h));
@@ -177,6 +173,10 @@ vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     st_h->conn_h = conn_h;
     st_h->lsquic_vpn_ctx = lsquic_vpn_ctx;
     st_h->buf_off = 0;
+
+    sport = TAILQ_FIRST(st_h->lsquic_vpn_ctx->prog->prog_sports);
+    conn_h->write_conn_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
+                        sport->fd, EV_WRITE, vpn_stream_handler, st_h);
 
     vpn_after_new_stream(st_h);
 
@@ -202,7 +202,6 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             int err = errno;
             if (err == EWOULDBLOCK || err == EAGAIN) {
                 LSQ_WARN("Stream not ready for writing, try again later\n");
-                event_add(st_h->conn_h->write_tun_ev, NULL);
                 break;
             }
 
@@ -218,10 +217,13 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     st_h->buf_off -= total_written;
     if(st_h->buf_off > 0){
         memmove(st_h->buf, st_h->buf + total_written, st_h->buf_off);
+        event_add(st_h->conn_h->write_conn_ev, NULL);
     } else {
+        lsquic_stream_flush(stream);
         lsquic_stream_wantwrite(stream, 0);
         lsquic_stream_wantread(stream, 1);
-    }
 
-    lsquic_stream_flush(stream);
+        if(st_h->conn_h->read_tun_ev)
+            event_add(st_h->conn_h->read_tun_ev, NULL);
+    }
 }

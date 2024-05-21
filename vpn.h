@@ -97,7 +97,7 @@ struct lsquic_conn_ctx {
     lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
     vpn_ctx_t           *vpn_ctx;
     struct event        *read_tun_ev;
-    struct event        *write_tun_ev;
+    struct event        *write_conn_ev;
 };
 
 struct lsquic_stream_ctx {
