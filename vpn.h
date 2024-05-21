@@ -11,6 +11,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <arpa/inet.h>
 
 #include <ctype.h>
 #include <errno.h>

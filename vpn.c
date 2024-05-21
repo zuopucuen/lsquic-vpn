@@ -39,10 +39,12 @@ int vpn_init(vpn_ctx_t *vpn, int server_flag) {
 }
 
 void lsquic_conn_ctx_init(struct lsquic_conn_ctx  *conn_h){
-    vpn_ctx_t *vpn_ctx = malloc(sizeof(*vpn_ctx));
-    lsquic_vpn_ctx_t *lsquic_vpn_ctx = conn_h->lsquic_vpn_ctx;
+    vpn_ctx_t *vpn_ctx;
+    lsquic_vpn_ctx_t *lsquic_vpn_ctx;
    
+    vpn_ctx = malloc(sizeof(*vpn_ctx));
     memset(vpn_ctx, 0, sizeof(*vpn_ctx));
+    lsquic_vpn_ctx = conn_h->lsquic_vpn_ctx;
 
     vpn_ctx->tun_fd = -1;
     vpn_ctx->addr_index = -1;
