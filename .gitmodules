@@ -4,3 +4,6 @@
 [submodule "boringssl"]
 	path = boringssl
 	url = https://boringssl.googlesource.com/boringssl
+[submodule "libevent"]
+	path = libevent
+	url = https://github.com/libevent/libevent.git

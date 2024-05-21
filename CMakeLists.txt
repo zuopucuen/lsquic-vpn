@@ -5,18 +5,17 @@ PROJECT(lsquic-vpn C)
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2")
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} $ENV{EXTRA_CFLAGS}")
 
+SET(EVENT__DISABLE_OPENSSL  ON)
+
 INCLUDE_DIRECTORIES(boringssl/include)
+INCLUDE_DIRECTORIES(libevent/include)
+INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR}/libevent/include())
 INCLUDE_DIRECTORIES(lsquic/include)
-INCLUDE_DIRECTORIES(lsquic/src/liblsquic) 
+INCLUDE_DIRECTORIES(lsquic/src/liblsquic)
 
 ADD_SUBDIRECTORY(boringssl)
+ADD_SUBDIRECTORY(libevent)
 ADD_SUBDIRECTORY(lsquic/src/liblsquic)
-
-if(APPLE)
-    # Need to install libevent, cmd is similar to "brew install libevent"
-    INCLUDE_DIRECTORIES(/usr/local/include/)  
-    LINK_DIRECTORIES(/usr/local/lib)
-endif(APPLE)
 
 SET(LIBS lsquic crypto ssl event m z)
 
