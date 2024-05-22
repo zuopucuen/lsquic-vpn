@@ -96,8 +96,10 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         if(vpn_init(vpn_ctx, IS_CLIENT) == -1)
             exit(1);
 
-        conn_h->read_tun_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
+        vpn_ctx->tun_read_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+        vpn_ctx->tun_write_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
+                                   vpn_ctx->tun_fd, EV_READ, tun_write_handler, vpn_ctx);
         goto end;
     }
     
@@ -105,7 +107,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_tun_write(vpn_ctx);
 
 end:
-    event_add(conn_h->read_tun_ev, NULL);
+    event_add(vpn_ctx->tun_read_ev, NULL);
     lsquic_stream_wantread(stream, 1);
 }
 

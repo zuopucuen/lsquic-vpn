@@ -3,32 +3,6 @@
 #include "os.h"
 #include "vpn.h"
 
-ssize_t safe_write(const int fd, const void *const buf_, size_t count, const int timeout)
-{
-    struct pollfd pfd;
-    const char *  buf = (const char *) buf_;
-    ssize_t       written;
-
-    while (count > (size_t) 0) {
-        while ((written = write(fd, buf, count)) < (ssize_t) 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                pfd.fd     = fd;
-                pfd.events = POLLOUT;
-                if (poll(&pfd, (nfds_t) 1, timeout) <= 0) {
-                    return (ssize_t) -1;
-                }
-            } else if (errno != EINTR) {
-                return (ssize_t) 0;
-            } else{
-                return -1;
-            }
-        }
-        buf += written;
-        count -= written;
-    }
-    return (ssize_t)(buf - (const char *) buf_);
-}
-
 ssize_t safe_read_partial(const int fd, void *const buf_, const size_t max_count)
 {
     unsigned char *const buf = (unsigned char *) buf_;
@@ -167,15 +141,22 @@ int tun_set_mtu(const char *if_name, int mtu)
 }
 
 #if defined(__linux__)
-ssize_t tun_read(int fd, void *data, size_t size)
+ssize_t tun_read(int fd, void *buf, size_t size)
 {
-    return safe_read_partial(fd, data, size);
+    ssize_t len;
+
+    while ((len = read(fd, buf, size)) < (ssize_t) 0 && errno == EINTR);
+    return len;
 }
 
-ssize_t tun_write(int fd, const void *data, size_t size)
+ssize_t tun_write(int fd, const void *buf, size_t size)
 {
-    return safe_write(fd, data, size, TIMEOUT);
+    ssize_t len;
+    
+    while ((len = write(fd, buf, size)) < (ssize_t) 0 && errno == EINTR);
+    return len;
 }
+
 #else
 ssize_t tun_read(int fd, void *data, size_t size)
 {

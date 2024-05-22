@@ -56,13 +56,18 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
 
     close(vpn_ctx->tun_fd);
 
-    if (conn_h->read_tun_ev)
+    if (vpn_ctx->tun_read_ev)
     {
-        event_del(conn_h->read_tun_ev);
-        event_free(conn_h->read_tun_ev);
+        event_del(vpn_ctx->tun_read_ev);
+        event_free(vpn_ctx->tun_read_ev);
     }
 
-    free(conn_h->vpn_ctx);
+    if (vpn_ctx->tun_write_ev) {
+        event_del(vpn_ctx->tun_write_ev);
+        event_free(vpn_ctx->tun_write_ev);
+    }
+
+    free(vpn_ctx);
 
     lsquic_conn_set_ctx(conn, NULL);
     free(conn_h);
@@ -144,10 +149,12 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         }
 
         vpn->addrs[addr_index]->is_used = 1;
-        conn_h->read_tun_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
+        vpn_ctx->tun_read_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
+        vpn_ctx->tun_write_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
+                                   vpn_ctx->tun_fd, EV_READ, tun_write_handler, vpn_ctx);
 
-        event_add(conn_h->read_tun_ev, NULL);
+        event_add(vpn_ctx->tun_read_ev, NULL);
 
         goto out;
     }

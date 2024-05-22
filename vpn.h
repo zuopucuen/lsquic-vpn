@@ -79,6 +79,8 @@ typedef struct vpn_ctx_s {
     char * packet_buf;
     char          buf[BUFF_SIZE];
     size_t        buf_off;
+    struct event        *tun_read_ev;
+    struct event        *tun_write_ev;
     vpn_t         * vpn;
 } vpn_ctx_t;
 
@@ -97,7 +99,6 @@ struct lsquic_conn_ctx {
     lsquic_conn_t       *conn;
     lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
     vpn_ctx_t           *vpn_ctx;
-    struct event        *read_tun_ev;
     struct event        *write_conn_ev;
 };
 
@@ -115,6 +116,7 @@ void lsquic_conn_ctx_init(struct lsquic_conn_ctx   *conn_h);
 void vpn_tun_write(vpn_ctx_t *vpn_ctx);
 size_t vpn_tun_read(int fd, char *buf, size_t buf_off);
 void tun_read_handler(int fd, short event, void *ctx);
+void tun_write_handler(int fd, short event, void *ctx);
 void vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h);
 lsquic_stream_ctx_t *vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream);
 void vpn_stream_handler(int fd, short event, void *ctx);

@@ -92,7 +92,7 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
 
         if (tun_write(vpn_ctx->tun_fd, vpn_ctx->packet_buf + VPN_HEAD_SIZE, packet_size) != packet_size) {
             LSQ_ERROR("twrite to tun faile");
-            break;
+            goto end;
         }else{
             LSQ_INFO("write to tun  %zu bytes",  packet_size);
         }
@@ -111,6 +111,9 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
 
     memmove(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
     vpn_ctx->packet_buf = vpn_ctx->buf;
+
+end:
+    event_add(vpn_ctx->tun_write_ev, NULL);
 }
 
 size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
@@ -154,6 +157,11 @@ void tun_read_handler(int fd, short event, void *ctx){
     lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
 
     //event_add(conn_h->read_tun_ev, NULL);
+}
+
+void tun_write_handler(int fd, short event, void *ctx){
+    vpn_ctx_t *vpn_ctx = ctx;
+    vpn_tun_write(ctx);
 }
 
 lsquic_stream_ctx_t *
@@ -226,7 +234,7 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         lsquic_stream_wantwrite(stream, 0);
         lsquic_stream_wantread(stream, 1);
 
-        if(st_h->conn_h->read_tun_ev)
-            event_add(st_h->conn_h->read_tun_ev, NULL);
+        if(st_h->conn_h->vpn_ctx->tun_read_ev)
+            event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
     }
 }
