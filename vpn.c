@@ -87,7 +87,7 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
 
     memcpy(&packet_size, vpn_ctx->packet_buf, VPN_HEAD_SIZE);
     packet_size = ntohs(packet_size);
-    while(0 < packet_size  &&  packet_size <= (vpn_ctx->buf_off - VPN_HEAD_SIZE)){   
+    while(0 < packet_size  &&  packet_size +  VPN_HEAD_SIZE <= vpn_ctx->buf_off){   
         LSQ_INFO("packet size: %zu, off: %zu", packet_size, vpn_ctx->buf_off);
 
         if (tun_write(vpn_ctx->tun_fd, vpn_ctx->packet_buf + VPN_HEAD_SIZE, packet_size) != packet_size) {
@@ -142,7 +142,7 @@ size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
 }
 
 void tun_read_handler(int fd, short event, void *ctx){
-    size_t len;
+    ssize_t len;
     lsquic_stream_ctx_t *st_h = ctx;
     lsquic_conn_ctx_t *conn_h = st_h->conn_h;
 
@@ -153,12 +153,9 @@ void tun_read_handler(int fd, short event, void *ctx){
         st_h->buf_off = len;
     }
 
-    //lsquic_stream_wantwrite(st_h->stream, 1);
-    //lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
-
-    //event_add(conn_h->read_tun_ev, NULL);
-
-    vpn_on_write(st_h->stream, st_h);
+    lsquic_stream_wantwrite(st_h->stream, 1);
+    lsquic_stream_wantread(st_h->stream, 0);
+    lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
 }
 
 void tun_write_handler(int fd, short event, void *ctx){
@@ -189,15 +186,17 @@ vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
 
     sport = TAILQ_FIRST(st_h->lsquic_vpn_ctx->prog->prog_sports);
     conn_h->write_conn_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
-                        sport->fd, EV_WRITE, vpn_stream_handler, st_h);
+                        sport->fd, EV_WRITE, vpn_stream_write_handler, st_h);
 
     vpn_after_new_stream(st_h);
 
     return st_h;
 }
 
-void vpn_stream_handler(int fd, short event, void *ctx){
+void vpn_stream_write_handler(int fd, short event, void *ctx){
     lsquic_stream_ctx_t *st_h = ctx;
+    lsquic_stream_wantwrite(st_h->stream, 1);
+    lsquic_stream_wantread(st_h->stream, 0);
     lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
 }
 
@@ -206,19 +205,22 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     size_t len;
     size_t total_written = 0;
+
     while (total_written < st_h->buf_off) {
         len = lsquic_stream_write(stream, st_h->buf + total_written , st_h->buf_off - total_written);
 
         if(len == 0){
             break;
         } else if(len<0) {
-            int err = errno;
-            if (err == EWOULDBLOCK || err == EAGAIN) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
                 LSQ_WARN("Stream not ready for writing, try again later\n");
                 break;
             }
 
-            LSQ_ERROR("Error writing to stream: %s\n", strerror(err));
+            if(errno == EINTR)
+                continue;
+
+            LSQ_ERROR("Error writing to stream: %s\n", strerror(errno));
             lsquic_conn_close(lsquic_stream_conn(stream));
             return;
         } 
@@ -230,12 +232,14 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     st_h->buf_off -= total_written;
     if(st_h->buf_off > 0){
         memmove(st_h->buf, st_h->buf + total_written, st_h->buf_off);
-        event_add(st_h->conn_h->write_conn_ev, NULL);
-    } else {
-        lsquic_stream_flush(stream);
-        lsquic_stream_wantwrite(stream, 0);
-
-        if(st_h->conn_h->vpn_ctx->tun_read_ev)
-            event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
+        if(st_h->conn_h->vpn_ctx->tun_write_ev)
+            event_add(st_h->conn_h->write_conn_ev, NULL);
     }
+
+    if(st_h->conn_h->vpn_ctx->tun_read_ev && BUFF_SIZE > BUFF_SIZE/4 + st_h->buf_off)
+        event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
+
+    lsquic_stream_flush(stream);
+    lsquic_stream_wantwrite(stream, 0);
+    lsquic_stream_wantread(stream, 1);
 }

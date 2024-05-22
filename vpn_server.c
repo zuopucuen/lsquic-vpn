@@ -75,7 +75,9 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
 
 void 
 vpn_after_new_stream(lsquic_stream_ctx_t * st_h){
-    lsquic_stream_wantwrite(st_h->stream, 1);
+    lsquic_stream_wantwrite(st_h->stream, 0);
+    lsquic_stream_wantread(st_h->stream, 1);
+    return;
 }
 
 static struct lsquic_conn_ctx *
@@ -117,7 +119,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     LSQ_INFO("read from stream %llu: %zd bytes, bufsize: %zu", lsquic_stream_id(stream), len, BUFF_SIZE - buf_used);
     
     if(vpn_ctx->tun_fd == -1){
-        LSQ_INFO("say Hello: %s", cur_buf+1);
+        LSQ_INFO("say Hello: %s", cur_buf);
         addr_index = 0;
 
         while(addr_index < vpn->max_conn && vpn->addrs[addr_index]->is_used == 1  ){
@@ -140,8 +142,6 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         );
         len = sprintf(st_h->buf, "%s,%s\n", vpn_ctx->remote_tun_ip, vpn_ctx->local_tun_ip);
         st_h->buf_off = len;
-        lsquic_stream_wantread(stream, 0);
-        lsquic_stream_wantwrite(stream, 1);
 
         if(vpn_init(vpn_ctx, IS_SERVER) == -1) {
             LSQ_ERROR("cannot create tun");
@@ -155,6 +155,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                                    vpn_ctx->tun_fd, EV_READ, tun_write_handler, vpn_ctx);
 
         event_add(vpn_ctx->tun_read_ev, NULL);
+        event_add(conn_h->write_conn_ev, NULL);
 
         goto out;
     }
@@ -167,10 +168,10 @@ out:
     return;
 
 end:
-        LSQ_NOTICE("closing connection");
-        lsquic_stream_shutdown(stream, 2);
-        conn_h = find_conn_h(st_h->lsquic_vpn_ctx, stream);
-        lsquic_conn_close(conn_h->conn);
+    LSQ_NOTICE("closing connection");
+    lsquic_stream_shutdown(stream, 2);
+    conn_h = find_conn_h(st_h->lsquic_vpn_ctx, stream);
+    lsquic_conn_close(conn_h->conn);
 }
 
 static void

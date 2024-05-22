@@ -29,7 +29,6 @@ vpn_client_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
     lsquic_vpn_ctx->conn_h = conn_h;
 
     lsquic_conn_ctx_init(conn_h);
-
     lsquic_conn_make_stream(conn);
     return conn_h;
 }
@@ -51,10 +50,13 @@ void
 vpn_after_new_stream(lsquic_stream_ctx_t * st_h){
     char hello[] = "Hello";
 
-    memcpy(&(st_h->buf[1]), hello, sizeof(hello));
+    memcpy(&(st_h->buf[0]), hello, sizeof(hello));
     st_h->buf_off = st_h->buf_off + sizeof(hello);
-
+    
     lsquic_stream_wantwrite(st_h->stream, 1);
+    lsquic_stream_wantread(st_h->stream, 0);
+
+    event_add(st_h->conn_h->write_conn_ev, NULL);
 }
 
 static void
@@ -100,6 +102,9 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
         vpn_ctx->tun_write_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_write_handler, vpn_ctx);
+
+        event_add(vpn_ctx->tun_read_ev, NULL);
+
         goto end;
     }
     
@@ -107,8 +112,8 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_tun_write(vpn_ctx);
 
 end:
-    event_add(vpn_ctx->tun_read_ev, NULL);
     lsquic_stream_wantread(stream, 1);
+    //lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
 }
 
 
