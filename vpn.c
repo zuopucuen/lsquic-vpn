@@ -153,10 +153,12 @@ void tun_read_handler(int fd, short event, void *ctx){
         st_h->buf_off = len;
     }
 
-    lsquic_stream_wantwrite(st_h->stream, 1);
-    lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
+    //lsquic_stream_wantwrite(st_h->stream, 1);
+    //lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
 
     //event_add(conn_h->read_tun_ev, NULL);
+
+    vpn_on_write(st_h->stream, st_h);
 }
 
 void tun_write_handler(int fd, short event, void *ctx){
@@ -232,7 +234,6 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     } else {
         lsquic_stream_flush(stream);
         lsquic_stream_wantwrite(stream, 0);
-        lsquic_stream_wantread(stream, 1);
 
         if(st_h->conn_h->vpn_ctx->tun_read_ev)
             event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
