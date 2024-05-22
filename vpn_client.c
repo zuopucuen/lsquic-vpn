@@ -171,14 +171,6 @@ main (int argc, char **argv)
         }
     }
 
-    int flags = fcntl(STDIN_FILENO, F_GETFL);
-    flags |= O_NONBLOCK;
-    if (0 != fcntl(STDIN_FILENO, F_SETFL, flags))
-    {
-        perror("fcntl");
-        exit(1);
-    }
-
     if (0 != prog_prep(&prog))
     {
         LSQ_ERROR("could not prep");

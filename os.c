@@ -58,6 +58,20 @@ int tun_create(char if_name[IFNAMSIZ], const char *wanted_name)
         errno = err;
         return -1;
     }
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl(F_GETFL)");
+        close(fd);
+        return -1;
+    }
+
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl(F_SETFL)");
+        close(fd);
+        return -1;
+    }
+
     snprintf(if_name, IFNAMSIZ, "%s", ifr.ifr_name);
 
     return fd;
@@ -95,6 +109,20 @@ static int tun_create_by_id(char if_name[IFNAMSIZ], unsigned int id)
         errno = err;
         return -1;
     }
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl(F_GETFL)");
+        close(fd);
+        return -1;
+    }
+    
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl(F_SETFL)");
+        close(fd);
+        return -1;
+    }
+
     snprintf(if_name, IFNAMSIZ, "utun%u", id);
 
     return fd;
