@@ -67,11 +67,6 @@ prog_init (struct prog *prog, unsigned flags,
     prog->prog_api.ea_pmi           = &pmi;
     prog->prog_api.ea_pmi_ctx       = &prog->prog_pba;
     prog->prog_api.ea_get_ssl_ctx   = get_ssl_ctx;
-    prog->prog_dummy_sport.sp_flags |= SPORT_SET_RCVBUF;
-    prog->prog_dummy_sport.sp_flags |= SPORT_SET_SNDBUF;
-    prog->prog_dummy_sport.sp_rcvbuf = 1024 * 1024;
-    prog->prog_dummy_sport.sp_rcvbuf = 1024 * 1024;
-
 #if LSQUIC_PREFERRED_ADDR
     if (getenv("LSQUIC_PREFERRED_ADDR4") || getenv("LSQUIC_PREFERRED_ADDR6"))
         prog->prog_flags |= PROG_SEARCH_ADDRS;
