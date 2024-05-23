@@ -113,7 +113,6 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
 end:
     lsquic_stream_wantread(stream, 1);
-    //lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
 }
 
 

@@ -109,8 +109,15 @@ vpn_tun_write(vpn_ctx_t *vpn_ctx){
         LSQ_INFO("last packet size: %zu, buf_off: %zu", packet_size, vpn_ctx->buf_off);
     }
 
+    if(vpn_ctx->buf_off == 0){
+        goto complete;
+    }
+
     memmove(vpn_ctx->buf, vpn_ctx->packet_buf, vpn_ctx->buf_off);
+    
+complete:
     vpn_ctx->packet_buf = vpn_ctx->buf;
+    return;
 
 end:
     event_add(vpn_ctx->tun_write_ev, NULL);
