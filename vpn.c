@@ -123,41 +123,33 @@ end:
     event_add(vpn_ctx->tun_write_ev, NULL);
 }
 
-size_t vpn_tun_read(int fd, char *buf, size_t buf_off){
-    size_t              len, llen;
-    char *cur_buf;
-
-    LSQ_INFO("tun read free buf: %zu", BUFF_SIZE - buf_off - VPN_HEAD_SIZE);
-    cur_buf = buf + buf_off + VPN_HEAD_SIZE;
-    len = tun_read(fd, cur_buf, BUFF_SIZE - buf_off - VPN_HEAD_SIZE);
-    if (len < 0) {
-        LSQ_WARN("tun_read error: %zu", len);
-        return 0;
-    }else if(len > DEFAULT_MTU){
-        LSQ_WARN("The data read(%zu) is greater than mtu(%d)", len, DEFAULT_MTU);
-        exit(1);
-        return 0;
-    }
-    
-    cur_buf -= VPN_HEAD_SIZE;
-    llen = htons(len);
-    memcpy(cur_buf, &llen, VPN_HEAD_SIZE);
-    buf_off = buf_off + len + VPN_HEAD_SIZE;
-    LSQ_INFO("read from tun: %zu bytes", len);
-
-    return buf_off;
-}
-
 void tun_read_handler(int fd, short event, void *ctx){
-    ssize_t len;
-    lsquic_stream_ctx_t *st_h = ctx;
-    lsquic_conn_ctx_t *conn_h = st_h->conn_h;
+    ssize_t len, llen;
+    char *cur_buf;
+    lsquic_stream_ctx_t *st_h;
+
+    len = 1;
+    st_h = ctx;
+    cur_buf = st_h->buf;
 
     LSQ_INFO("buf off before read tun: %zu bytes", st_h->buf_off);
-    len = vpn_tun_read(fd, st_h->buf, st_h->buf_off);
-
-    if(len > 0){
-        st_h->buf_off = len;
+    while(st_h->buf_off + VPN_HEAD_SIZE + DEFAULT_MTU <= BUFF_SIZE && len > 0){
+        LSQ_INFO("tun read free buf: %zu", BUFF_SIZE - st_h->buf_off - VPN_HEAD_SIZE);
+        cur_buf = st_h->buf + st_h->buf_off + VPN_HEAD_SIZE;
+        len = tun_read(fd, cur_buf, BUFF_SIZE - st_h->buf_off - VPN_HEAD_SIZE);
+        if (len < 0) {
+            LSQ_WARN("tun_read error: %zd", len);
+            break;
+        }else if(len > DEFAULT_MTU){
+            LSQ_WARN("The data read(%zd) is greater than mtu(%d)", len, DEFAULT_MTU);
+            continue;
+        }
+    
+        cur_buf -= VPN_HEAD_SIZE;
+        llen = htons(len);
+        memcpy(cur_buf, &llen, VPN_HEAD_SIZE);
+        st_h->buf_off = st_h->buf_off + len + VPN_HEAD_SIZE;
+        LSQ_INFO("read from tun: %zu bytes", len);
     }
 
     lsquic_stream_wantwrite(st_h->stream, 1);
@@ -249,7 +241,7 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     if(total_written > 0){
         lsquic_stream_flush(stream);
     }
-    
+
     lsquic_stream_wantwrite(stream, 0);
     lsquic_stream_wantread(stream, 1);
 }

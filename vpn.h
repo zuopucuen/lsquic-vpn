@@ -114,7 +114,6 @@ int addr_init(vpn_t *vpn, int tun_sum);
 int vpn_init(vpn_ctx_t *vpn, int server_flag);
 void lsquic_conn_ctx_init(struct lsquic_conn_ctx   *conn_h);
 void vpn_tun_write(vpn_ctx_t *vpn_ctx);
-size_t vpn_tun_read(int fd, char *buf, size_t buf_off);
 void tun_read_handler(int fd, short event, void *ctx);
 void tun_write_handler(int fd, short event, void *ctx);
 void vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h);
