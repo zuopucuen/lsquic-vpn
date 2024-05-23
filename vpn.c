@@ -246,7 +246,7 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     if(st_h->conn_h->vpn_ctx->tun_read_ev && BUFF_SIZE > BUFF_SIZE/4 + st_h->buf_off)
         event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
 
-    //lsquic_stream_flush(stream);
+    lsquic_stream_flush(stream);
     lsquic_stream_wantwrite(stream, 0);
     lsquic_stream_wantread(stream, 1);
 }
