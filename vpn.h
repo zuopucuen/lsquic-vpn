@@ -48,8 +48,7 @@
 #include "prog.h"
 
 #define DEFAULT_MTU 1500
-#define TIMEOUT (60 * 1000)
-#define BUFF_SIZE 65536
+#define BUFF_SIZE 4096
 #define IS_CLIENT 0
 #define IS_SERVER 1
 #define MAX_TUN_SUM 10

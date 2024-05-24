@@ -233,7 +233,7 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     st_h->buf_off -= total_written;
     if(st_h->buf_off > 0){
         memmove(st_h->buf, st_h->buf + total_written, st_h->buf_off);
-        if(st_h->conn_h->vpn_ctx->tun_write_ev)
+        if(st_h->conn_h->write_conn_ev)
             event_add(st_h->conn_h->write_conn_ev, NULL);
     }else if(st_h->conn_h->vpn_ctx->tun_read_ev){
             event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
