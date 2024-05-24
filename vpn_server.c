@@ -113,6 +113,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     len = lsquic_stream_read(stream, cur_buf, BUFF_SIZE - buf_used);
     if (len <= 0)
     {
+        LSQ_ERROR("read from stream error");
         goto end;
     }
 

@@ -62,7 +62,7 @@ vpn_after_new_stream(lsquic_stream_ctx_t * st_h){
 static void
 vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
-    size_t len, packet_size, buf_used;
+    ssize_t len, packet_size, buf_used;
     char *tmp, *cur_buf;
     lsquic_conn_ctx_t *conn_h = st_h->conn_h;
     vpn_ctx_t *vpn_ctx = conn_h->vpn_ctx;
@@ -71,6 +71,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
 
     if((BUFF_SIZE - buf_used) <=1){
+        LSQ_ERROR("BUFF_SIZE < buf_used: %d, %zu", BUFF_SIZE, buf_used);
         exit(1);
     }
 
@@ -78,6 +79,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     if (len <= 0)
     {
         lsquic_stream_shutdown(stream, 2);
+        LSQ_ERROR("read from stream error");
         exit(1);
     }
 
