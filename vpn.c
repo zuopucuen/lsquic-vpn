@@ -53,6 +53,8 @@ void lsquic_conn_ctx_init(struct lsquic_conn_ctx  *conn_h){
     vpn_ctx->buf_off = 0;
 
     conn_h->vpn_ctx = vpn_ctx;
+    conn_h->write_conn_ev_timeout.tv_sec = 0;
+    conn_h->write_conn_ev_timeout.tv_usec = 200;
 }
 
 int addr_init(vpn_t *vpn, int tun_sum) {
@@ -183,10 +185,11 @@ vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     st_h->conn_h = conn_h;
     st_h->lsquic_vpn_ctx = lsquic_vpn_ctx;
     st_h->buf_off = 0;
+    st_h->packet_buf = st_h->buf;
 
     sport = TAILQ_FIRST(st_h->lsquic_vpn_ctx->prog->prog_sports);
     conn_h->write_conn_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
-                        sport->fd, EV_WRITE, vpn_stream_write_handler, st_h);
+                    -1, EV_TIMEOUT, vpn_stream_write_handler, st_h);
 
     vpn_after_new_stream(st_h);
 
@@ -204,39 +207,23 @@ void
 vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     size_t len;
-    size_t total_written = 0;
+    lsquic_conn_ctx_t *conn_h;
 
-    while (total_written < st_h->buf_off) {
-        len = lsquic_stream_write(stream, st_h->buf + total_written , st_h->buf_off - total_written);
-
-        if(len == 0){
-            break;
-        } else if(len<0) {
-            if (errno == EWOULDBLOCK || errno == EAGAIN) {
-                LSQ_WARN("Stream not ready for writing, try again later\n");
-                break;
-            }
-
-            if(errno == EINTR)
-                continue;
-
-            LSQ_ERROR("Error writing to stream: %s\n", strerror(errno));
-            lsquic_conn_close(lsquic_stream_conn(stream));
-            return;
-        } 
-        
-        LSQ_INFO("write to stream %llu: %zd bytes, total : %zu bytes", lsquic_stream_id(stream), len, st_h->buf_off - total_written);
-        total_written += len;
-        lsquic_stream_flush(stream);
+    len = lsquic_stream_write(stream, st_h->packet_buf, st_h->buf_off);
+    
+    if(len<0) {
+        LSQ_ERROR("Error writing to stream: %s\n", strerror(errno));
+        exit(1);
     }
 
-    st_h->buf_off -= total_written;
-    if(st_h->buf_off > 0){
-        memmove(st_h->buf, st_h->buf + total_written, st_h->buf_off);
-        if(st_h->conn_h->write_conn_ev)
-            event_add(st_h->conn_h->write_conn_ev, NULL);
+    LSQ_INFO("write to stream %llu: %zd bytes, total : %zu bytes", lsquic_stream_id(stream), len, st_h->buf_off);
+        lsquic_stream_flush(stream);
+
+    st_h->buf_off -= len;
+    if(st_h->buf_off > 0 && st_h->conn_h->write_conn_ev){
+        event_add(st_h->conn_h->write_conn_ev, &conn_h->write_conn_ev_timeout);
     }else if(st_h->conn_h->vpn_ctx->tun_read_ev){
-            event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
+        event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
     }
 
     lsquic_stream_wantwrite(stream, 0);

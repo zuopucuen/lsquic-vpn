@@ -155,7 +155,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                                    vpn_ctx->tun_fd, EV_READ, tun_write_handler, vpn_ctx);
 
         event_add(vpn_ctx->tun_read_ev, NULL);
-        event_add(conn_h->write_conn_ev, NULL);
+        lsquic_stream_wantwrite(stream, 1);
 
         goto out;
     }

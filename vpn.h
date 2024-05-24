@@ -7,6 +7,7 @@
 #include <sys/uio.h>
 #include <sys/wait.h>
 #include <sys/queue.h>
+#include <sys/time.h>
 
 #include <net/if.h>
 #include <netinet/in.h>
@@ -99,12 +100,14 @@ struct lsquic_conn_ctx {
     lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
     vpn_ctx_t           *vpn_ctx;
     struct event        *write_conn_ev;
+    struct timeval      write_conn_ev_timeout;
 };
 
 struct lsquic_stream_ctx {
     lsquic_stream_t     *stream;
     lsquic_conn_ctx_t   *conn_h;
     lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
+    char  *packet_buf;
     char                 buf[BUFF_SIZE];
     ssize_t               buf_off;
 };

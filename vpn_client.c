@@ -56,7 +56,7 @@ vpn_after_new_stream(lsquic_stream_ctx_t * st_h){
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_stream_wantread(st_h->stream, 0);
 
-    event_add(st_h->conn_h->write_conn_ev, NULL);
+    //event_add(st_h->conn_h->write_conn_ev, &st_h->conn_h->write_conn_ev_timeout);
 }
 
 static void
