@@ -154,10 +154,9 @@ void tun_read_handler(int fd, short event, void *ctx){
         LSQ_INFO("read from tun: %zu bytes", len);
     }
 
-    //event_add(st_h->conn_h->write_conn_ev, NULL);
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_stream_wantread(st_h->stream, 0);
-    lsquic_engine_process_conns(st_h->lsquic_vpn_ctx->prog->prog_engine);
+    prog_process_conns(st_h->lsquic_vpn_ctx->prog);
 }
 
 void tun_write_handler(int fd, short event, void *ctx){

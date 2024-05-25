@@ -76,7 +76,8 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     }
 
     len = lsquic_stream_read(stream, cur_buf, BUFF_SIZE - buf_used);
-    if (len <= 0)
+
+    if (len <=0 && errno != EWOULDBLOCK)
     {
         lsquic_stream_shutdown(stream, 2);
         LSQ_ERROR("read from stream error");
@@ -87,7 +88,6 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
     if(vpn_ctx->tun_fd == -1){
         vpn_ctx->local_tun_ip = cur_buf;
-
         vpn_ctx->remote_tun_ip = strchr(vpn_ctx->local_tun_ip, ',');
         *vpn_ctx->remote_tun_ip = '\0';
         vpn_ctx->remote_tun_ip++;
