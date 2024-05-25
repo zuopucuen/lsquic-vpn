@@ -89,9 +89,10 @@ prog_add_sport (struct prog *prog, const char *arg)
     if (!sport)
         return -1;
     /* Default settings: */
-    sport->sp_flags = prog->prog_dummy_sport.sp_flags;
-    sport->sp_sndbuf = prog->prog_dummy_sport.sp_sndbuf;
-    sport->sp_rcvbuf = prog->prog_dummy_sport.sp_rcvbuf;
+    sport->sp_flags |= SPORT_SET_SNDBUF;
+    sport->sp_flags |= SPORT_SET_SNDBUF;
+    sport->sp_sndbuf = 1024 * 1024;
+    sport->sp_rcvbuf = 1024 * 16;
     TAILQ_INSERT_TAIL(prog->prog_sports, sport, next_sport);
     return 0;
 }

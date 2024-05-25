@@ -140,7 +140,7 @@ void tun_read_handler(int fd, short event, void *ctx){
         cur_buf = st_h->buf + st_h->buf_off + VPN_HEAD_SIZE;
         len = tun_read(fd, cur_buf, BUFF_SIZE - st_h->buf_off - VPN_HEAD_SIZE);
         if (len < 0) {
-            LSQ_WARN("tun_read error: %zd", len);
+            LSQ_INFO("tun_read error: %zd", len);
             break;
         }else if(len > DEFAULT_MTU){
             LSQ_WARN("The data read(%zd) is greater than mtu(%d)", len, DEFAULT_MTU);
