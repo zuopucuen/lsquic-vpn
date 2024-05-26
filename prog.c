@@ -56,7 +56,11 @@ prog_init (struct prog *prog, unsigned flags,
     prog->prog_settings.es_ecn      = 0;
 #endif
     prog->prog_settings.es_idle_timeout = 300;
-    prog->prog_settings.es_cc_algo = 1; // Cubic
+    prog->prog_settings.es_cc_algo = 2; // BBRv1
+    prog->prog_settings.es_cfcw = 1024 * 1024 * 16;
+    prog->prog_settings.es_max_cfcw = 1024 * 1024 *32;
+    prog->prog_settings.es_sfcw = 1024 * 1024 * 10;
+    prog->prog_settings.es_max_sfcw = 1024 * 1024 *16; 
 
     prog->prog_api.ea_settings      = &prog->prog_settings;
     prog->prog_api.ea_stream_if     = stream_if;
