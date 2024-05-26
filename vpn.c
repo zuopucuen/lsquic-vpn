@@ -134,7 +134,6 @@ void tun_read_handler(int fd, short event, void *ctx){
     st_h = ctx;
     cur_buf = st_h->buf;
 
-    LSQ_INFO("buf off before read tun: %zu bytes", st_h->buf_off);
     while(st_h->buf_off + VPN_HEAD_SIZE + DEFAULT_MTU <= BUFF_SIZE && len > 0){
         LSQ_INFO("tun read free buf: %zu", BUFF_SIZE - st_h->buf_off - VPN_HEAD_SIZE);
         cur_buf = st_h->buf + st_h->buf_off + VPN_HEAD_SIZE;
@@ -200,6 +199,7 @@ void vpn_stream_write_handler(int fd, short event, void *ctx){
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_stream_wantread(st_h->stream, 0);
     prog_process_conns(st_h->lsquic_vpn_ctx->prog);
+    lsquic_stream_wantread(st_h->stream, 1);
 }
 
 void
