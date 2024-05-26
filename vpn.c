@@ -129,6 +129,7 @@ void tun_read_handler(int fd, short event, void *ctx){
     ssize_t len, llen;
     char *cur_buf;
     lsquic_stream_ctx_t *st_h;
+    lsquic_conn_ctx_t *conn_h;
 
     len = 1;
     st_h = ctx;
@@ -153,9 +154,16 @@ void tun_read_handler(int fd, short event, void *ctx){
         LSQ_INFO("read from tun: %zu bytes", len);
     }
 
-    lsquic_stream_wantwrite(st_h->stream, 1);
-    lsquic_stream_wantread(st_h->stream, 0);
-    prog_process_conns(st_h->lsquic_vpn_ctx->prog);
+    //lsquic_stream_wantwrite(st_h->stream, 1);
+    //lsquic_stream_wantread(st_h->stream, 0);
+    //prog_process_conns(st_h->lsquic_vpn_ctx->prog);
+
+    //if(st_h->buf_off > 0 && st_h->conn_h->write_conn_ev){
+    //    conn_h = st_h->conn_h;
+    //    event_add(conn_h->write_conn_ev, &conn_h->write_conn_ev_timeout);
+    ///}
+
+    vpn_stream_write_handler(-1, -1, st_h);
 }
 
 void tun_write_handler(int fd, short event, void *ctx){
@@ -196,10 +204,18 @@ vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
 
 void vpn_stream_write_handler(int fd, short event, void *ctx){
     lsquic_stream_ctx_t *st_h = ctx;
-    lsquic_stream_wantwrite(st_h->stream, 1);
+    lsquic_conn_ctx_t *conn_h;
+
+    vpn_on_write(st_h->stream, st_h);
+    lsquic_stream_wantwrite(st_h->stream, 0);
     lsquic_stream_wantread(st_h->stream, 0);
     prog_process_conns(st_h->lsquic_vpn_ctx->prog);
     lsquic_stream_wantread(st_h->stream, 1);
+
+    if(st_h->buf_off > 0 && st_h->conn_h->write_conn_ev){
+        conn_h = st_h->conn_h;
+        event_add(conn_h->write_conn_ev, &conn_h->write_conn_ev_timeout);
+    }
 }
 
 void
@@ -219,11 +235,10 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         lsquic_stream_flush(stream);
 
     st_h->buf_off -= len;
-    if(st_h->buf_off > 0 && st_h->conn_h->write_conn_ev){
-        conn_h = st_h->conn_h;
+
+    if (st_h->buf_off > 0){
         st_h->packet_buf = st_h->packet_buf + len;
-        event_add(st_h->conn_h->write_conn_ev, &conn_h->write_conn_ev_timeout);
-    }else if(st_h->conn_h->vpn_ctx->tun_read_ev){
+    } else if(st_h->buf_off == 0 && st_h->conn_h->vpn_ctx->tun_read_ev){
         st_h->packet_buf = st_h->buf;
         event_add(st_h->conn_h->vpn_ctx->tun_read_ev, NULL);
     }
