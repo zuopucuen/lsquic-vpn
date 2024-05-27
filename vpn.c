@@ -54,7 +54,7 @@ void lsquic_conn_ctx_init(struct lsquic_conn_ctx  *conn_h){
 
     conn_h->vpn_ctx = vpn_ctx;
     conn_h->write_conn_ev_timeout.tv_sec = 0;
-    conn_h->write_conn_ev_timeout.tv_usec = 200;
+    conn_h->write_conn_ev_timeout.tv_usec = 600;
 }
 
 int addr_init(vpn_t *vpn, int tun_sum) {
