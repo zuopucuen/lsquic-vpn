@@ -15,7 +15,6 @@ struct server_cert
 
 
 int
-//load_cert (struct lsquic_hash *, const char *optarg);
 load_cert (struct lsquic_hash *certs, const char *ca_file, const char *cert_file, const char *key_file);
 
 int

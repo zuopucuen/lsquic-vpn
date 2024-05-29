@@ -99,17 +99,15 @@ struct lsquic_conn_ctx {
     lsquic_conn_t       *conn;
     lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
     vpn_ctx_t           *vpn_ctx;
-    struct event        *write_conn_ev;
-    struct timeval      write_conn_ev_timeout;
 };
 
 struct lsquic_stream_ctx {
     lsquic_stream_t     *stream;
     lsquic_conn_ctx_t   *conn_h;
-    lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
-    char  *packet_buf;
+    lsquic_vpn_ctx_t    *lsquic_vpn_ctx;
     char                 buf[BUFF_SIZE];
-    ssize_t               buf_off;
+    ssize_t              buf_off;
+    ssize_t              packet_remaining;
 };
 
 int addr_init(vpn_t *vpn, int tun_sum);
@@ -120,7 +118,6 @@ void tun_read_handler(int fd, short event, void *ctx);
 void tun_write_handler(int fd, short event, void *ctx);
 void vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h);
 lsquic_stream_ctx_t *vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream);
-void vpn_stream_write_handler(int fd, short event, void *ctx);
 
 extern volatile sig_atomic_t exit_signal_received;
 extern void vpn_after_new_stream(lsquic_stream_ctx_t * st_h);
