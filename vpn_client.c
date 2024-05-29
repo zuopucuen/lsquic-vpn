@@ -54,7 +54,7 @@ vpn_after_new_stream(lsquic_stream_ctx_t * st_h){
     st_h->buf_off = st_h->buf_off + sizeof(hello);
     
     lsquic_stream_wantwrite(st_h->stream, 1);
-    lsquic_stream_wantread(st_h->stream, 0);
+    lsquic_stream_wantread(st_h->stream, 1);
 }
 
 static void

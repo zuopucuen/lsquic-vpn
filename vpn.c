@@ -201,8 +201,6 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     size_t len, packets_size;
     lsquic_conn_ctx_t *conn_h;
 
-    LSQ_INFO("===================write size %zu", st_h->buf_off);
-
     len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
     
     if(len<0) {
