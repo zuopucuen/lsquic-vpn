@@ -67,6 +67,12 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
         event_free(vpn_ctx->tun_write_ev);
     }
 
+    if (conn_h->write_conn_ev)
+    {
+        event_del(conn_h->write_conn_ev);
+        event_free(conn_h->write_conn_ev);
+    }
+
     free(vpn_ctx);
 
     lsquic_conn_set_ctx(conn, NULL);
@@ -157,7 +163,8 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
                                    vpn_ctx->tun_fd, EV_WRITE, tun_write_handler, vpn_ctx);
 
         event_add(vpn_ctx->tun_read_ev, NULL);
-        lsquic_stream_wantwrite(stream, 1);
+        vpn_on_write(stream, st_h);
+        lsquic_stream_wantwrite(stream, 0);
 
         goto out;
     }

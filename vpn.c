@@ -53,6 +53,8 @@ void lsquic_conn_ctx_init(struct lsquic_conn_ctx  *conn_h){
     vpn_ctx->buf_off = 0;
 
     conn_h->vpn_ctx = vpn_ctx;
+    conn_h->write_conn_ev_timeout.tv_sec = 0;
+    conn_h->write_conn_ev_timeout.tv_usec = STREAM_WRITE_RETRY_TIME;
 }
 
 int addr_init(vpn_t *vpn, int tun_sum) {
@@ -154,18 +156,22 @@ void tun_read_handler(int fd, short event, void *ctx){
         LSQ_INFO("read from tun: %zu bytes", len);
     }
 
-
-    lsquic_stream_wantwrite(st_h->stream, 1);
-    lsquic_stream_wantread(st_h->stream, 0);
-    prog_process_conns(st_h->lsquic_vpn_ctx->prog);
-    lsquic_stream_wantread(st_h->stream, 1);
-
-    event_add(conn_h->vpn_ctx->tun_read_ev, NULL);
+    vpn_stream_write_handler(-1, -1, st_h);    
 }
 
 void tun_write_handler(int fd, short event, void *ctx){
     vpn_ctx_t *vpn_ctx = ctx;
     vpn_tun_write(ctx);
+}
+
+void vpn_stream_write_handler(int fd, short event, void *ctx){
+    lsquic_stream_ctx_t *st_h = ctx;
+    lsquic_conn_ctx_t *conn_h;
+
+    vpn_on_write(st_h->stream, st_h);
+    lsquic_stream_wantread(st_h->stream, 0);
+    prog_process_conns(st_h->lsquic_vpn_ctx->prog);
+    lsquic_stream_wantread(st_h->stream, 1);
 }
 
 lsquic_stream_ctx_t *
@@ -188,8 +194,13 @@ vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
     st_h->conn_h = conn_h;
     st_h->lsquic_vpn_ctx = lsquic_vpn_ctx;
     st_h->buf_off = 0;
+    st_h->packet_buf = st_h->buf;
     st_h->packet_remaining = 0;
 
+    conn_h->write_conn_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
+                  -1, EV_TIMEOUT, vpn_stream_write_handler, st_h);
+
+    lsquic_stream_wantwrite(st_h->stream, 0);
     vpn_after_new_stream(st_h);
 
     return st_h;
@@ -198,10 +209,11 @@ vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream)
 void
 vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
-    size_t len, packets_size;
+    size_t len, packets_size, total_writen;
     lsquic_conn_ctx_t *conn_h;
-
-    len = lsquic_stream_write(stream, st_h->buf, st_h->buf_off);
+    
+    conn_h = st_h->conn_h;
+    len = lsquic_stream_write(stream, st_h->packet_buf, st_h->buf_off);
     
     if(len<0) {
         LSQ_ERROR("Error writing to stream: %s\n", strerror(errno));
@@ -211,27 +223,41 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     LSQ_INFO("write to stream %llu: %zd bytes, total : %zu bytes", lsquic_stream_id(stream), len, st_h->buf_off);
     lsquic_stream_flush(stream);
 
-    if(len == 0){
-        st_h->buf_off = st_h->packet_remaining;
-        goto end;
-    }
-
     st_h->buf_off -= len;
 
     if (st_h->buf_off == 0){
         st_h->packet_remaining = 0;
-    } else if (st_h->buf_off > 0){
-        packets_size = st_h->packet_remaining;
+        st_h->retry = STREAM_WRITE_RETRY;
+        st_h->packet_buf = st_h->buf;
+        goto out;
+    }
+    
+    if (--st_h->retry > 0){
+        if(st_h->buf_off > 0 && st_h->conn_h->write_conn_ev){
+            event_add(conn_h->write_conn_ev, &conn_h->write_conn_ev_timeout);
+        }
 
-        while(packets_size < len){
+        st_h->packet_buf += len;
+
+        return;
+    } else {
+        packets_size = st_h->packet_remaining;
+        total_writen = st_h->packet_buf - st_h->buf + len;
+
+        while(packets_size < total_writen){
             packets_size += ntohs(*(unsigned short *) &st_h->buf[packets_size]) + VPN_HEAD_SIZE;
         }
         
-        st_h->buf_off = packets_size - len;
+        st_h->buf_off = packets_size - total_writen;
         st_h->packet_remaining = st_h->buf_off;
-        memmove(st_h->buf, &st_h->buf[len], st_h->buf_off);
+        memmove(st_h->buf, st_h->packet_buf + len, st_h->buf_off);
+        st_h->packet_buf = st_h->buf;
+
+        st_h->retry = STREAM_WRITE_RETRY;
     }
 
-end:
-    lsquic_stream_wantwrite(stream, 0);
+out:
+    if (conn_h->vpn_ctx->tun_read_ev){
+        event_add(conn_h->vpn_ctx->tun_read_ev, NULL);
+    }
 }

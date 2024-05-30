@@ -55,6 +55,8 @@
 #define MAX_TUN_SUM 10
 #define BEGIN_DEFAULT_IP 0xC0A8FF01 // 192.168.255.1
 #define VPN_HEAD_SIZE 2
+#define STREAM_WRITE_RETRY 3
+#define STREAM_WRITE_RETRY_TIME 1 // ms
 
 typedef struct vpn_tun_addr_s {
     char local_ip[16];
@@ -99,6 +101,8 @@ struct lsquic_conn_ctx {
     lsquic_conn_t       *conn;
     lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
     vpn_ctx_t           *vpn_ctx;
+    struct event        *write_conn_ev;
+    struct timeval      write_conn_ev_timeout;
 };
 
 struct lsquic_stream_ctx {
@@ -107,7 +111,9 @@ struct lsquic_stream_ctx {
     lsquic_vpn_ctx_t    *lsquic_vpn_ctx;
     char                 buf[BUFF_SIZE];
     ssize_t              buf_off;
+    char                *packet_buf;
     ssize_t              packet_remaining;
+    int                  retry;
 };
 
 int addr_init(vpn_t *vpn, int tun_sum);
@@ -118,6 +124,7 @@ void tun_read_handler(int fd, short event, void *ctx);
 void tun_write_handler(int fd, short event, void *ctx);
 void vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h);
 lsquic_stream_ctx_t *vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream);
+void vpn_stream_write_handler(int fd, short event, void *ctx);
 
 extern volatile sig_atomic_t exit_signal_received;
 extern void vpn_after_new_stream(lsquic_stream_ctx_t * st_h);
