@@ -361,10 +361,10 @@ Cmds firewall_rules_cmds(int is_server, int set_route)
         static const char *set_cmds[] =
                 { "ip link set dev $IF_NAME up",
                   "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
-                  "ip route add default dev $IF_NAME table 10086", 
+                  "route add default gw $REMOTE_TUN_IP metric 1", 
                   NULL };
         static const char *unset_cmds[] = 
-                { "ip rule delete table 10086", 
+                { "route delete default gw $REMOTE_TUN_IP", 
                 NULL };
 
 #elif defined(__APPLE__)
