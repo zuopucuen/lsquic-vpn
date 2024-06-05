@@ -371,11 +371,11 @@ Cmds firewall_rules_cmds(int is_server, int set_route)
         static const char *set_cmds[] =
                 { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up",
                   "route add $EXT_IP $EXT_GW_IP",
-                  "route add 0/1 $REMOTE_TUN_IP",
+                  "route change default $REMOTE_TUN_IP",
                  NULL };
         static const char *unset_cmds[] = 
                 { "route delete $EXT_IP",
-                  "route delete 0/1", 
+                  "route change default $EXT_GW_IP", 
                 NULL };
 #endif
 
