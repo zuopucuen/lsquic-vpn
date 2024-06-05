@@ -55,7 +55,7 @@
 #define MAX_TUN_SUM 10
 #define BEGIN_DEFAULT_IP 0xC0A8FF01 // 192.168.255.1
 #define VPN_HEAD_SIZE 2
-#define STREAM_WRITE_RETRY 2
+#define STREAM_WRITE_RETRY 3
 #define STREAM_WRITE_RETRY_TIME 1000 // ms
 
 typedef struct vpn_tun_addr_s {
