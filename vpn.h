@@ -55,8 +55,8 @@
 #define MAX_TUN_SUM 10
 #define BEGIN_DEFAULT_IP 0xC0A8FF01 // 192.168.255.1
 #define VPN_HEAD_SIZE 2
-#define STREAM_WRITE_RETRY 3
-#define STREAM_WRITE_RETRY_TIME 1 // ms
+#define STREAM_WRITE_RETRY 2
+#define STREAM_WRITE_RETRY_TIME 1000 // ms
 
 typedef struct vpn_tun_addr_s {
     char local_ip[16];
@@ -73,6 +73,8 @@ typedef struct vpn_ctx_s {
     const char *  wanted_if_name;
     char *  local_tun_ip;
     char *  remote_tun_ip;
+    char *  server_ip;
+    const char *  ext_gw_ip;
     char          if_name[IFNAMSIZ];
     int           is_server;
     int           tun_fd;
@@ -84,6 +86,7 @@ typedef struct vpn_ctx_s {
     struct event        *tun_read_ev;
     struct event        *tun_write_ev;
     vpn_t         * vpn;
+    lsquic_conn_ctx_t * conn_h;
 } vpn_ctx_t;
 
 typedef struct lsquic_vpn_ctx_s {
@@ -93,6 +96,7 @@ typedef struct lsquic_vpn_ctx_s {
     struct sport_head sports;
     struct prog *prog;
     vpn_t *vpn;
+    int set_route;
 } lsquic_vpn_ctx_t;
 
 

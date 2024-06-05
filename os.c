@@ -337,48 +337,76 @@ int shell_cmd(const char *substs[][2], const char *args_str, int silent)
     return 0;
 }
 
-Cmds firewall_rules_cmds(int is_server)
+Cmds firewall_rules_cmds(int is_server, int set_route)
 {
     if (is_server) {
 #ifdef __linux__
         static const char
             *set_cmds[] =
-                { "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
-                  "ip link set dev $IF_NAME up",
+                { "ip link set dev $IF_NAME up",
+                  "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
                   NULL },
             *unset_cmds[] = {
                 NULL
             };
+
 #elif defined(__APPLE__)
         static const char *set_cmds[] = { 
             "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up", NULL },
                           *unset_cmds[] = { NULL, NULL };
 #endif
         return (Cmds){ set_cmds, unset_cmds };
-    } else {
-#if defined(__APPLE__) 
+    } else if (set_route) {
+#if defined(__linux__)
         static const char *set_cmds[] =
-            { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up", NULL },
-                          *unset_cmds[] = { NULL,};
-#elif defined(__linux__)
-        static const char
-            *set_cmds[] =
                 { "ip link set dev $IF_NAME up",
                   "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
-                  NULL },
-            *unset_cmds[] = { NULL };
-#else
-        static const char *const *set_cmds = NULL, *const *unset_cmds = NULL;
+                  "ip route add default dev $IF_NAME table 10086", 
+                  NULL };
+        static const char *unset_cmds[] = 
+                { "ip rule delete table 10086", 
+                NULL };
+
+#elif defined(__APPLE__)
+        static const char *set_cmds[] =
+                { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up",
+                  "route add $EXT_IP $EXT_GW_IP",
+                  "route add 0/1 $REMOTE_TUN_IP",
+                 NULL };
+        static const char *unset_cmds[] = 
+                { "route delete $EXT_IP",
+                  "route delete 0/1", 
+                NULL };
 #endif
+
+
+        return (Cmds){ set_cmds, unset_cmds };
+    } else {
+#if defined(__linux__)
+        static const char *set_cmds[] =
+                { "ip link set dev $IF_NAME up",
+                  "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
+                  NULL };
+        static const char *unset_cmds[] = { NULL };
+
+#elif defined(__APPLE__)
+        static const char *set_cmds[] =
+                { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up",
+                 NULL };
+        static const char *unset_cmds[] = { NULL };
+#endif
+
         return (Cmds){ set_cmds, unset_cmds };
     }
 }
 
-int firewall_rules(vpn_ctx_t *vpn, int set, int silent)
+int firewall_rules(vpn_ctx_t *vpn, int set, int silent, int set_route)
 {
     const char *       substs[][2] = { { "$LOCAL_TUN_IP", vpn->local_tun_ip },
                                 { "$REMOTE_TUN_IP", vpn->remote_tun_ip },
                                 { "$IF_NAME", vpn->if_name },
+                                { "$EXT_IP", vpn->server_ip },
+                                { "$EXT_GW_IP", vpn->ext_gw_ip },
                                 { NULL, NULL } };
     const char *const *cmds;
     size_t             i;
@@ -386,8 +414,8 @@ int firewall_rules(vpn_ctx_t *vpn, int set, int silent)
     if (vpn->firewall_rules_set == set) {
         return 0;
     }
-    if ((cmds = (set ? firewall_rules_cmds(vpn->is_server).set
-                     : firewall_rules_cmds(vpn->is_server).unset)) == NULL) {
+    if ((cmds = (set ? firewall_rules_cmds(vpn->is_server, set_route).set
+                     : firewall_rules_cmds(vpn->is_server, set_route).unset)) == NULL) {
         LSQ_ERROR("Routing commands for that operating system have not been "
                 "added yet.\n");
         return 0;

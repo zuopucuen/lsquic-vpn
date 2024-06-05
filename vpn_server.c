@@ -106,7 +106,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     vpn_ctx_t *vpn_ctx;
     vpn_t *vpn;
     vpn_tun_addr_t *addr;
-    size_t addr_index, len, buf_used;
+    ssize_t addr_index, len, buf_used;
     char * cur_buf;
     int fd;
 
@@ -139,7 +139,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             goto end;
         }
 
-        vpn_ctx->addr_index = addr_index - 1;
+        vpn_ctx->addr_index = addr_index;
         vpn_ctx->local_tun_ip = vpn->addrs[addr_index]->local_ip;
         vpn_ctx->remote_tun_ip = vpn->addrs[addr_index]->remote_ip;
 
@@ -232,6 +232,7 @@ main (int argc, char **argv)
 
     prog_init(&prog, LSENG_SERVER, &lsquic_vpn_ctx.sports,
                                         &server_vpn_stream_if, &lsquic_vpn_ctx);
+     prog.lsquic_vpn_ctx = &lsquic_vpn_ctx;
 
     while (-1 != (opt = getopt(argc, argv, PROG_OPTS "hn:")))
     {

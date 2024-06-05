@@ -12,6 +12,7 @@ struct event_base;
 struct lsquic_hash;
 struct sport_head;
 struct ssl_ctx_st;
+struct lsquic_vpn_ctx_s;
 
 struct prog
 {
@@ -54,6 +55,7 @@ struct prog
         PROG_SEARCH_ADDRS   = 1 << 1,
 #endif
     }                               prog_flags;
+    struct lsquic_vpn_ctx_s        *lsquic_vpn_ctx;
 };
 
 int
@@ -77,7 +79,7 @@ prog_init (struct prog *, unsigned lsquic_engine_flags, struct sport_head *,
 #   define IP_DONTFRAG_FLAG ""
 #endif
 
-#define PROG_OPTS "i:k:m:c:C:y:L:l:o:H:s:S:Y:z:G:WA:" RECVMMSG_FLAG SENDMMSG_FLAG \
+#define PROG_OPTS "i:k:m:c:C:y:L:l:o:H:s:S:Y:z:G:WA:r" RECVMMSG_FLAG SENDMMSG_FLAG \
                                                             IP_DONTFRAG_FLAG
 
 /* Returns:

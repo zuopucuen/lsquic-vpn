@@ -25,6 +25,7 @@
 #include "cert.h"
 #include "common.h"
 #include "prog.h"
+#include "vpn.h"
 
 static int prog_stopped;
 static const char *s_keylog_dir;
@@ -131,6 +132,7 @@ prog_print_common_options (const struct prog *prog, FILE *out)
 "                   1: Cubic\n"
 "                   2: BBRv1 (this is the default).\n"
 "                   3: Adaptive congestion control.\n"
+"   -r          enable client route set\n"
 "   -h          Print this help screen and exit\n"
     );
 }
@@ -384,14 +386,18 @@ prog_timer_handler (int fd, short what, void *arg)
 static void
 prog_signal_handler (int fd, short what, void *arg)
 {
-    LSQ_NOTICE("Got sigint, stopping engine");
-
+    
     struct prog *const prog = arg;
+    lsquic_vpn_ctx_t *lsquic_vpn_ctx = prog->lsquic_vpn_ctx;
 
-    LSQ_NOTICE("Got sigterm, cool down engine");
-    prog->prog_flags |= PROG_FLAG_COOLDOWN;
-    lsquic_engine_cooldown(prog->prog_engine);
+    LSQ_NOTICE("Got sigint, stopping engine");
+    
+    if (lsquic_vpn_ctx->conn_h) {
+        lsquic_conn_close(lsquic_vpn_ctx->conn_h->conn);
+        LSQ_NOTICE("Got sigterm, close conns");
+    }   
     prog_process_conns(prog);
+    prog_stop(prog);
     exit(EXIT_SUCCESS);
 }
 

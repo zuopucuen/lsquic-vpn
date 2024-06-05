@@ -38,6 +38,12 @@ static void
 vpn_client_on_conn_closed (lsquic_conn_t *conn)
 {
     lsquic_conn_ctx_t *conn_h = lsquic_conn_get_ctx(conn);
+    vpn_ctx_t * vpn_ctx = conn_h->vpn_ctx;
+
+    if (firewall_rules(vpn_ctx, 0, 0, conn_h->lsquic_vpn_ctx->set_route) != 0) {
+        LSQ_ERROR("set Firewall rules faile");
+    }
+
     LSQ_NOTICE("Connection closed");
     prog_stop(conn_h->lsquic_vpn_ctx->prog);
 
@@ -64,6 +70,7 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     char *tmp, *cur_buf;
     lsquic_conn_ctx_t *conn_h = st_h->conn_h;
     vpn_ctx_t *vpn_ctx = conn_h->vpn_ctx;
+    struct service_port *sport;
 
     cur_buf = vpn_ctx->packet_buf + vpn_ctx->buf_off;
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
@@ -94,9 +101,14 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
         LSQ_INFO("local_ip: %s, remote_ip: %s", vpn_ctx->local_tun_ip, vpn_ctx->remote_tun_ip);
 
+        sport = TAILQ_LAST(st_h->lsquic_vpn_ctx->prog->prog_sports, sport_head);
+        vpn_ctx->server_ip = sport->host;
+        vpn_ctx->ext_gw_ip = get_default_gw_ip();
         
         if(vpn_init(vpn_ctx, IS_CLIENT) == -1)
             exit(1);
+
+        LSQ_INFO("server ip %s, gw ip %s ", vpn_ctx->server_ip,  vpn_ctx->ext_gw_ip);
 
         vpn_ctx->tun_read_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
@@ -164,14 +176,18 @@ main (int argc, char **argv)
     TAILQ_INIT(&sports);
     prog_init(&prog, 0, &sports, &client_vpn_stream_if, &lsquic_vpn_ctx);
     prog.prog_api.ea_alpn = "echo";
+    prog.lsquic_vpn_ctx = &lsquic_vpn_ctx;
 
-    while (-1 != (opt = getopt(argc, argv, PROG_OPTS "h")))
+    while (-1 != (opt = getopt(argc, argv, PROG_OPTS "h" )))
     {
         switch (opt) {
         case 'h':
             usage(argv[0]);
             prog_print_common_options(&prog, stdout);
             exit(0);
+        case 'r':
+            lsquic_vpn_ctx.set_route = 1;
+            continue;
         default:
             if (0 != prog_set_opt(&prog, opt, optarg))
                 exit(1);

@@ -9,28 +9,28 @@ static void hex_to_ip(u_int32_t hex, char *ip){
              hex & 0xFF);
 }
 
-int vpn_init(vpn_ctx_t *vpn, int server_flag) {
-    vpn->is_server = server_flag;
+int vpn_init(vpn_ctx_t *vpn_ctx, int server_flag) {
+    vpn_ctx->is_server = server_flag;
 
-    vpn->tun_fd = tun_create(vpn->if_name, vpn->wanted_if_name);
+    vpn_ctx->tun_fd = tun_create(vpn_ctx->if_name, vpn_ctx->wanted_if_name);
     
-    if (vpn->tun_fd == -1) {
+    if (vpn_ctx->tun_fd == -1) {
         LSQ_ERROR("tun device creation");
         return -1;
     }
 
     LSQ_INFO("tun:%s, local_ip:%s, remote_ip:%s", 
-        vpn->if_name,
-        vpn->local_tun_ip, 
-        vpn->remote_tun_ip);
+        vpn_ctx->if_name,
+        vpn_ctx->local_tun_ip, 
+        vpn_ctx->remote_tun_ip);
 
-    if (tun_set_mtu(vpn->if_name, DEFAULT_MTU) != 0) {
+    if (tun_set_mtu(vpn_ctx->if_name, DEFAULT_MTU) != 0) {
         LSQ_ERROR("cannot set mtu: %d", DEFAULT_MTU);
     }
 
-    vpn->firewall_rules_set = -1;
+    vpn_ctx->firewall_rules_set = -1;
 
-    if (firewall_rules(vpn, 1, 0) != 0) {
+    if (firewall_rules(vpn_ctx, 1, 0, vpn_ctx->conn_h->lsquic_vpn_ctx->set_route) != 0) {
         LSQ_ERROR("set Firewall rules faile");
         return -1;
     }
@@ -51,6 +51,7 @@ void lsquic_conn_ctx_init(struct lsquic_conn_ctx  *conn_h){
     vpn_ctx->vpn = lsquic_vpn_ctx->vpn;
     vpn_ctx->packet_buf = vpn_ctx->buf;
     vpn_ctx->buf_off = 0;
+    vpn_ctx->conn_h = conn_h;
 
     conn_h->vpn_ctx = vpn_ctx;
     conn_h->write_conn_ev_timeout.tv_sec = 0;
@@ -229,6 +230,9 @@ vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         st_h->packet_remaining = 0;
         st_h->retry = STREAM_WRITE_RETRY;
         st_h->packet_buf = st_h->buf;
+
+        lsquic_stream_wantwrite(stream, 0);
+    
         goto out;
     }
     
