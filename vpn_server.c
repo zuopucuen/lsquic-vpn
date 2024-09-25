@@ -232,21 +232,18 @@ main (int argc, char **argv)
 
     prog_init(&prog, LSENG_SERVER, &lsquic_vpn_ctx.sports,
                                         &server_vpn_stream_if, &lsquic_vpn_ctx);
-     prog.lsquic_vpn_ctx = &lsquic_vpn_ctx;
+    prog.lsquic_vpn_ctx = &lsquic_vpn_ctx;
 
-    while (-1 != (opt = getopt(argc, argv, PROG_OPTS "hn:")))
+    while (-1 != (opt = getopt(argc, argv, "hdc:" )))
     {
         switch (opt) {
-        case 'n':
-            lsquic_vpn_ctx.n_conn = atoi(optarg);
-            break;
         case 'h':
             usage(argv[0]);
             prog_print_common_options(&prog, stdout);
             exit(0);
-        default:
-            if (0 != prog_set_opt(&prog, opt, optarg))
-                exit(1);
+        case 'd':
+        case 'c':
+            prog_parse_config_file(&prog, optarg);
         }
     }
 
@@ -264,6 +261,8 @@ main (int argc, char **argv)
     }
 
     LSQ_DEBUG("entering event loop");
+
+    //daemonize();
 
     s = prog_run(&prog);
     prog_cleanup(&prog);

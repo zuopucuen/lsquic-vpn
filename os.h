@@ -2,6 +2,7 @@
 #define os_H 1
 
 #include "vpn.h"
+
 ssize_t safe_read_partial(const int fd, void *const buf_, const size_t max_count);
 
 typedef struct Cmds {
@@ -26,5 +27,7 @@ int tun_set_mtu(const char *if_name, int mtu);
 ssize_t tun_read(int fd, void *data, size_t size);
 
 ssize_t tun_write(int fd, const void *data, size_t size);
+
+void daemonize();
 
 #endif

@@ -83,7 +83,7 @@ prog_init (struct prog *prog, unsigned flags,
     /* Non prog-specific initialization: */
     lsquic_global_init(flags & LSENG_SERVER ? LSQUIC_GLOBAL_SERVER :
                                                     LSQUIC_GLOBAL_CLIENT);
-    lsquic_log_to_fstream(stderr, LLTS_HHMMSSMS);
+    lsquic_log_to_fstream(stderr,  LLTS_YYYYMMDD_HHMMSSMS);
     lsquic_logger_lopt("=notice");
     return 0;
 }
@@ -110,92 +110,121 @@ void
 prog_print_common_options (const struct prog *prog, FILE *out)
 {
     fprintf(out,
-#if HAVE_REGEX
-"   -s SVCPORT  Service port.  Takes on the form of host:port, host,\n"
-"                 or port. If port is not set, the default\n"
-"                 is 443.\n"
-#else
-"   -s SVCPORT  Service port.  Takes on the form of host:port or host.\n"
-"                 If port is not set, the default is 443.\n"
-#endif
-"                 If no -s option is given, 0.0.0.0:12345 address\n"
-"                 is used.\n"
-"   -c Cert path. \n"
-"   -K Key path. \n"
-"   -C CA root  path。 \n"
-"   -L LEVEL    Log level for all modules.  Possible values are `debug',\n"
-"                 `info', `notice', `warn', `error', `alert', `emerg',\n"
-"                 and `crit'.\n"
-"   -G dir      SSL keys will be logged to files in this directory.\n"
-"   -A CC_ALGO  Congestion control algorithm.  The following algorithms are\n"
-"                 supported.\n"
-"                   1: Cubic\n"
-"                   2: BBRv1 (this is the default).\n"
-"                   3: Adaptive congestion control.\n"
-"   -r          enable client route set\n"
+"   -d          enable daemon\n"
+"   -c          configure file\n"
 "   -h          Print this help screen and exit\n"
     );
 }
 
-int
-prog_set_opt (struct prog *prog, int opt, const char *arg)
-{
-    struct stat st;
-    int s;
-
-    switch (opt)
-    {
-    case 'c':
-        prog->cert_file = arg;
-        return 0;
-    case 'C':
-        prog->ca_file = arg;
-        return 0;
-    case 'k':
-        prog->key_file = arg;
-        return 0;
-    case 'L':
-        return lsquic_set_log_level(arg);
-    case 's':
-        if (0 == (prog->prog_engine_flags & LSENG_SERVER) &&
-                                            !TAILQ_EMPTY(prog->prog_sports))
-            return -1;
-        return prog_add_sport(prog, arg);
-    case 'A':          
-        prog->prog_settings.es_cc_algo = atoi(optarg);
-        return 0; 
-    case 'G':
-        if (0 == stat(optarg, &st))
-        {
-            if (!S_ISDIR(st.st_mode))
-            {
-                LSQ_ERROR("%s is not a directory", optarg);
-                return -1;
-            }
-        }
-        else
-        {
-            s = mkdir(optarg, 0700);
-            if (s != 0)
-            {
-                LSQ_ERROR("cannot create directory %s: %s", optarg,
-                                                        strerror(errno));
-                return -1;
-            }
-        }
-        s_keylog_dir = optarg;
-        if (prog->prog_settings.es_ql_bits)
-        {
-            LSQ_NOTICE("QL loss bits turned off because of -G.  If you want "
-                "to turn it on, just override: -G dir -o ql_bits=2");
-            prog->prog_settings.es_ql_bits = 0;
-        }
-        return 0;
-    default:
-        return 1;
-    }
+static int
+    tut_log_buf (void *ctx, const char *buf, size_t len) {
+    FILE *out = ctx;
+    fwrite(buf, 1, len, out);
+    fflush(out);
+    return 0;
 }
 
+// 去除字符串首尾的空白字符
+static char *trim(char *str) {
+    char *end;
+ 
+    // 去除开头的空白字符
+    while (isspace(*str)) {
+        str++;
+    }
+ 
+    // 去除尾部的空白字符
+    end = str + strlen(str) - 1;
+    while (end > str && isspace(*end)) {
+        end--;
+    }
+ 
+    // 在空白字符处结束字符串
+    *(end + 1) = '\0';
+ 
+    return str;
+}
+
+int prog_parse_config_file(struct prog *prog, const char *filename) {
+    char line[MAX_LINE_LENGTH];
+    char key[MAX_KEY_LENGTH];
+    char *value;
+    char *split_char = "=";
+    size_t key_length, value_length;
+    
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        perror("打开配置文件时出错");
+        return 1;
+    }
+ 
+    while (fgets(line, sizeof(line), file) != NULL) {       
+        // 忽略注释和空行
+        if (line[0] == '#' || line[0] == '\0') {
+            continue;
+        }
+ 
+        // 分割行，获取键和值
+        char *token = strtok(line, split_char);
+
+        if (token != NULL) {    
+            token = trim(token);
+            strncpy(key, token, sizeof(key) - 1);
+            key_length = strlen(key);
+            key[key_length] = '\0';
+ 
+            token = strtok(NULL, split_char);
+            if (token != NULL) {
+                token = trim(token);
+                value_length = strlen(token);
+                value = (char *)malloc(value_length + 1);
+                strncpy(value, token, value_length);
+                value[value_length] = '\0';
+            }
+
+            //printf("键: %s, 值: %s\n", key, value);
+
+            if (strcmp("server", key) == 0){
+                if (0 == (prog->prog_engine_flags & LSENG_SERVER) &&
+                                            !TAILQ_EMPTY(prog->prog_sports)){
+                    perror("server addr or port error");
+                    return 1;
+                }
+                prog_add_sport(prog, value);
+                
+
+            }else if (strcmp("cert", key) == 0){
+                prog->cert_file = value;
+            }else if (strcmp("key", key) == 0){
+                prog->key_file = value;
+            }else if (strcmp("ca", key) == 0){
+                prog->ca_file = value;
+            }else if (strcmp("log_file", key) == 0){
+                FILE *log_file;
+                log_file = fopen(value, "wb");
+                if (file == NULL) {
+                    perror("Error opening file");
+                    return 1;
+                }
+
+                static const struct lsquic_logger_if logger_if = { tut_log_buf, };
+                lsquic_logger_init(&logger_if, log_file, LLTS_YYYYMMDD_HHMMSSMS);
+                
+            }else if (strcmp("log_level", key) == 0){
+                lsquic_set_log_level(value);
+            }else if (strcmp("ca", key) == 0){
+                
+            }else if (strcmp("ca", key) == 0){
+                
+            }else if (strcmp("ca", key) == 0){
+                
+            }
+        }
+    }
+ 
+    fclose(file);
+    return 0;
+}
 
 struct event_base *
 prog_eb (struct prog *prog)

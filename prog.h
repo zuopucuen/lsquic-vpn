@@ -79,16 +79,8 @@ prog_init (struct prog *, unsigned lsquic_engine_flags, struct sport_head *,
 #   define IP_DONTFRAG_FLAG ""
 #endif
 
-#define PROG_OPTS "i:k:m:c:C:y:L:l:o:H:s:S:Y:z:G:WA:r" RECVMMSG_FLAG SENDMMSG_FLAG \
-                                                            IP_DONTFRAG_FLAG
-
-/* Returns:
- *  0   Applied
- *  1   Not applicable
- * -1   Error
- */
-int
-prog_set_opt (struct prog *, int opt, const char *arg);
+#define MAX_LINE_LENGTH 256
+#define MAX_KEY_LENGTH 64
 
 struct event_base *
 prog_eb (struct prog *);
@@ -119,5 +111,8 @@ prog_process_conns (struct prog *);
 
 void
 prog_sport_cant_send (struct prog *, int fd);
+
+int 
+prog_parse_config_file(struct prog *prog, const char *filename);
 
 #endif

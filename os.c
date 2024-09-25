@@ -429,3 +429,56 @@ int firewall_rules(vpn_ctx_t *vpn, int set, int silent, int set_route)
     vpn->firewall_rules_set = set;
     return 0;
 }
+ 
+void daemonize() {
+    pid_t pid;
+    pid = fork();
+ 
+    if (pid < 0) {
+        // 错误处理
+        perror("fork failed");
+        exit(1);
+    }
+ 
+    if (pid > 0) {
+        // 父进程退出
+        exit(0);
+    }
+ 
+    // 子进程继续运行
+    if (setsid() < 0) {
+        // 错误处理
+        perror("setsid failed");
+        exit(1);
+    }
+ 
+    // 此时已是新的会话组长和进程组长，但仍与控制终端相关
+    // 改变当前工作目录，防止卸载文件系统
+    if ((chdir("/")) < 0) {
+        // 错误处理
+        perror("chdir failed");
+        exit(1);
+    }
+ 
+    // 关闭所有打开的文件描述符
+    // 这是一个清理操作，确保不占用不必要的资源
+    close(0);
+    close(1);
+    close(2);
+ 
+    // 重定向标准输入、输出、错误输出到/dev/null
+    open("/dev/null", O_RDONLY);
+    open("/dev/null", O_RDWR);
+    open("/dev/null", O_RDWR);
+ 
+    // 守护进程的主要工作
+    while(1) {
+        // 示例：每10秒钟记录当前时间
+        time_t now;
+        time(&now);
+        printf("Daemon is running. Current time is %ld\n", now);
+        sleep(10);
+    }
+ 
+    exit(0);
+}

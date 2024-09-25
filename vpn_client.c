@@ -178,19 +178,16 @@ main (int argc, char **argv)
     prog.prog_api.ea_alpn = "echo";
     prog.lsquic_vpn_ctx = &lsquic_vpn_ctx;
 
-    while (-1 != (opt = getopt(argc, argv, PROG_OPTS "h" )))
+    while (-1 != (opt = getopt(argc, argv, "hdc:" )))
     {
         switch (opt) {
         case 'h':
             usage(argv[0]);
             prog_print_common_options(&prog, stdout);
             exit(0);
-        case 'r':
-            lsquic_vpn_ctx.set_route = 1;
-            continue;
-        default:
-            if (0 != prog_set_opt(&prog, opt, optarg))
-                exit(1);
+        case 'd':
+        case 'c':
+            prog_parse_config_file(&prog, optarg);
         }
     }
 

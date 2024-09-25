@@ -8,6 +8,7 @@
 #include <sys/wait.h>
 #include <sys/queue.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 
 #include <net/if.h>
 #include <netinet/in.h>
