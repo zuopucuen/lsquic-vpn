@@ -40,7 +40,7 @@ vpn_client_on_conn_closed (lsquic_conn_t *conn)
     lsquic_conn_ctx_t *conn_h = lsquic_conn_get_ctx(conn);
     vpn_ctx_t * vpn_ctx = conn_h->vpn_ctx;
 
-    if (firewall_rules(vpn_ctx, 0, 0, conn_h->lsquic_vpn_ctx->set_route) != 0) {
+    if (firewall_rules(vpn_ctx->tun, 0, 0, conn_h->lsquic_vpn_ctx->set_route) != 0) {
         LSQ_ERROR("set Firewall rules faile");
     }
 
@@ -54,10 +54,8 @@ vpn_client_on_conn_closed (lsquic_conn_t *conn)
 
 void 
 vpn_after_new_stream(lsquic_stream_ctx_t * st_h){
-    char hello[] = "Hello";
-
-    memcpy(&(st_h->buf[0]), hello, sizeof(hello));
-    st_h->buf_off = st_h->buf_off + sizeof(hello);
+    memcpy(&(st_h->buf[0]), st_h->lsquic_vpn_ctx->tun->remote_tun_ip, strlen(st_h->lsquic_vpn_ctx->tun->remote_tun_ip));
+    st_h->buf_off = st_h->buf_off + strlen(st_h->lsquic_vpn_ctx->tun->remote_tun_ip);
     
     lsquic_stream_wantwrite(st_h->stream, 1);
     lsquic_stream_wantread(st_h->stream, 1);
@@ -92,23 +90,22 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     LSQ_INFO("read from stream %llu: %zd bytes, bufsize: %zu", lsquic_stream_id(stream), len, BUFF_SIZE - buf_used);
 
     if(vpn_ctx->tun_fd == -1){
-        vpn_ctx->local_tun_ip = cur_buf;
-        vpn_ctx->remote_tun_ip = strchr(vpn_ctx->local_tun_ip, ',');
-        *vpn_ctx->remote_tun_ip = '\0';
-        vpn_ctx->remote_tun_ip++;
-        tmp = strchr(vpn_ctx->remote_tun_ip, '\n');
-        *tmp = '\0';
-
-        LSQ_INFO("local_ip: %s, remote_ip: %s", vpn_ctx->local_tun_ip, vpn_ctx->remote_tun_ip);
+        if(strcmp("server is ok", cur_buf) != 0){
+            LSQ_ERROR("Handshake failed: %s", cur_buf);
+            exit(EXIT_FAILURE);
+        }
 
         sport = TAILQ_LAST(st_h->lsquic_vpn_ctx->prog->prog_sports, sport_head);
-        vpn_ctx->server_ip = sport->host;
-        vpn_ctx->ext_gw_ip = get_default_gw_ip();
         
-        if(vpn_init(vpn_ctx, IS_CLIENT) == -1)
-            exit(1);
+        vpn_ctx->tun = st_h->lsquic_vpn_ctx->tun;
+        vpn_ctx->tun->server_ip = sport->host;
+        vpn_ctx->tun->ext_gw_ip = get_default_gw_ip();
 
-        LSQ_INFO("server ip %s, gw ip %s ", vpn_ctx->server_ip,  vpn_ctx->ext_gw_ip);
+        tun_init(vpn_ctx->tun);
+
+        vpn_ctx->tun_fd = vpn_ctx->tun->fd;
+
+        LSQ_INFO("server ip %s, gw ip %s ", vpn_ctx->tun->server_ip,  vpn_ctx->tun->ext_gw_ip);
 
         vpn_ctx->tun_read_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);

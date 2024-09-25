@@ -102,24 +102,18 @@ static int tun_create_by_id(char if_name[IFNAMSIZ], unsigned int id)
     return fd;
 }
 
-int tun_create(char if_name[IFNAMSIZ], const char *wanted_name)
+int tun_create(char if_name[IFNAMSIZ])
 {
     unsigned int id;
     int          fd;
 
-    if (wanted_name == NULL || *wanted_name == 0) {
-        for (id = 0; id < 32; id++) {
-            if ((fd = tun_create_by_id(if_name, id)) != -1) {
-                return fd;
-            }
+
+    for (id = 0; id < 32; id++) {
+        if ((fd = tun_create_by_id(if_name, id)) != -1) {
+            return fd;
         }
-        return -1;
     }
-    if (sscanf(wanted_name, "utun%u", &id) != 1) {
-        errno = EINVAL;
-        return -1;
-    }
-    return tun_create_by_id(if_name, id);
+    return -1;
 }
 #endif
 
@@ -400,7 +394,7 @@ Cmds firewall_rules_cmds(int is_server, int set_route)
     }
 }
 
-int firewall_rules(vpn_ctx_t *vpn, int set, int silent, int set_route)
+int firewall_rules(tun_t *vpn, int set, int silent, int set_route)
 {
     const char *       substs[][2] = { { "$LOCAL_TUN_IP", vpn->local_tun_ip },
                                 { "$REMOTE_TUN_IP", vpn->remote_tun_ip },

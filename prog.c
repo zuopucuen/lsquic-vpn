@@ -26,6 +26,7 @@
 #include "common.h"
 #include "prog.h"
 #include "vpn.h"
+#include "os.h"
 
 static int prog_stopped;
 static const char *s_keylog_dir;
@@ -150,7 +151,11 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
     char key[MAX_KEY_LENGTH];
     char *value;
     char *split_char = "=";
+    char *tmp;
     size_t key_length, value_length;
+    tun_t *tun;
+    int i,j;
+    struct service_port *sport;
     
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
@@ -212,12 +217,47 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                 
             }else if (strcmp("log_level", key) == 0){
                 lsquic_set_log_level(value);
-            }else if (strcmp("ca", key) == 0){
-                
-            }else if (strcmp("ca", key) == 0){
-                
-            }else if (strcmp("ca", key) == 0){
-                
+            }else if (strcmp("ip_route", key) == 0){
+                i = 0;
+
+                tun = malloc(sizeof(tun_t));
+                memset(tun, 0, sizeof(tun_t));
+
+                sport = TAILQ_LAST(prog->prog_sports, sport_head);
+                tun->server_ip = sport->host;
+                tun->ext_gw_ip = get_default_gw_ip();
+
+                if(prog->lsquic_vpn_ctx->tun == NULL){
+                    prog->lsquic_vpn_ctx->tun = tun;
+                }else{
+                    prog->lsquic_vpn_ctx->tun->next = tun;
+                }
+
+                if(prog->lsquic_vpn_ctx->is_server){
+                    tun->local_tun_ip = value;
+                }else{
+                    tun->remote_tun_ip = value;
+                }
+
+                while(*(value+1) != '\0'){
+                    if(*value == ','){
+                        *value = '\0';
+                        if(i == 0){
+                            i++;
+                            value++;
+                            if(prog->lsquic_vpn_ctx->is_server){
+                                tun->remote_tun_ip = value;
+                            }else{
+                                tun->local_tun_ip = value;
+                            }
+                            continue;
+                        }else{
+                        }
+                    }
+                    value++;
+                }
+                if(prog->lsquic_vpn_ctx->is_server)
+                    tun_init(tun);
             }
         }
     }

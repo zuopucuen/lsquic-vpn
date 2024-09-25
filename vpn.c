@@ -9,28 +9,27 @@ static void hex_to_ip(u_int32_t hex, char *ip){
              hex & 0xFF);
 }
 
-int vpn_init(vpn_ctx_t *vpn_ctx, int server_flag) {
-    vpn_ctx->is_server = server_flag;
-
-    vpn_ctx->tun_fd = tun_create(vpn_ctx->if_name, vpn_ctx->wanted_if_name);
+int tun_init(tun_t *tun) {
+    tun->fd = tun_create(tun->if_name);
     
-    if (vpn_ctx->tun_fd == -1) {
+    if (tun->fd == -1) {
         LSQ_ERROR("tun device creation");
         return -1;
     }
 
     LSQ_INFO("tun:%s, local_ip:%s, remote_ip:%s", 
-        vpn_ctx->if_name,
-        vpn_ctx->local_tun_ip, 
-        vpn_ctx->remote_tun_ip);
+        tun->if_name,
+        tun->local_tun_ip, 
+        tun->remote_tun_ip);
 
-    if (tun_set_mtu(vpn_ctx->if_name, DEFAULT_MTU) != 0) {
+    if (tun_set_mtu(tun->if_name, DEFAULT_MTU) != 0) {
         LSQ_ERROR("cannot set mtu: %d", DEFAULT_MTU);
     }
 
-    vpn_ctx->firewall_rules_set = -1;
 
-    if (firewall_rules(vpn_ctx, 1, 0, vpn_ctx->conn_h->lsquic_vpn_ctx->set_route) != 0) {
+    tun->firewall_rules_set = -1;
+
+    if (firewall_rules(tun, 1, 0, 0) != 0) {
         LSQ_ERROR("set Firewall rules faile");
         return -1;
     }
@@ -47,8 +46,6 @@ void lsquic_conn_ctx_init(struct lsquic_conn_ctx  *conn_h){
     lsquic_vpn_ctx = conn_h->lsquic_vpn_ctx;
 
     vpn_ctx->tun_fd = -1;
-    vpn_ctx->addr_index = -1;
-    vpn_ctx->vpn = lsquic_vpn_ctx->vpn;
     vpn_ctx->packet_buf = vpn_ctx->buf;
     vpn_ctx->buf_off = 0;
     vpn_ctx->conn_h = conn_h;
@@ -56,32 +53,6 @@ void lsquic_conn_ctx_init(struct lsquic_conn_ctx  *conn_h){
     conn_h->vpn_ctx = vpn_ctx;
     conn_h->write_conn_ev_timeout.tv_sec = 0;
     conn_h->write_conn_ev_timeout.tv_usec = STREAM_WRITE_RETRY_TIME;
-}
-
-int addr_init(vpn_t *vpn, int tun_sum) {
-    int i;
-    u_int32_t local_ip, remote_ip;
-
-    local_ip = BEGIN_DEFAULT_IP;
-    remote_ip = local_ip + 1;
-
-    tun_sum = tun_sum > MAX_TUN_SUM ? MAX_TUN_SUM : tun_sum;
-
-    for(i=0;i<tun_sum;i++){
-        vpn->addrs[i] = malloc(sizeof(vpn_tun_addr_t));
-        memset(vpn->addrs[i], 0, sizeof(vpn_tun_addr_t));
-        hex_to_ip(local_ip, vpn->addrs[i]->local_ip);
-        hex_to_ip(remote_ip, vpn->addrs[i]->remote_ip);
-        vpn->addrs[i]->is_used = 0;
-        LSQ_INFO("local %s, remote %s", vpn->addrs[i]->local_ip, vpn->addrs[i]->remote_ip);
-
-        local_ip = local_ip + 10;
-        remote_ip = remote_ip + 10;
-
-    }
-    vpn->max_conn = tun_sum;
-
-    return 1;
 }
 
 void

@@ -59,35 +59,37 @@
 #define STREAM_WRITE_RETRY 3
 #define STREAM_WRITE_RETRY_TIME 1000 // ms
 
-typedef struct vpn_tun_addr_s {
-    char local_ip[16];
-    char remote_ip[16];
-    int is_used;
-} vpn_tun_addr_t;
-
-typedef struct vpn_s {
-    vpn_tun_addr_t *addrs[MAX_TUN_SUM];
-    int max_conn;
-} vpn_t;
-
-typedef struct vpn_ctx_s {
-    const char *  wanted_if_name;
+typedef struct tun_s {
     char *  local_tun_ip;
     char *  remote_tun_ip;
     char *  server_ip;
     const char *  ext_gw_ip;
+    int           fd;
+    int     is_used;
     char          if_name[IFNAMSIZ];
+    int           firewall_rules_set;
+    int           is_server;
+    void *next;
+}tun_t;
+
+
+typedef struct vpn_ctx_s {
+    //char *  local_tun_ip;
+    //char *  remote_tun_ip;
+    //char *  server_ip;
+    //const char *  ext_gw_ip;
+    //char          if_name[IFNAMSIZ];
     int           is_server;
     int           tun_fd;
-    int           firewall_rules_set;
-    int           addr_index;
+    //int           firewall_rules_set;
+    tun_t  *tun;
     char * packet_buf;
     char          buf[BUFF_SIZE];
     ssize_t        buf_off;
     struct event        *tun_read_ev;
     struct event        *tun_write_ev;
-    vpn_t         * vpn;
     lsquic_conn_ctx_t * conn_h;
+
 } vpn_ctx_t;
 
 typedef struct lsquic_vpn_ctx_s {
@@ -96,8 +98,9 @@ typedef struct lsquic_vpn_ctx_s {
     int n_conn;
     struct sport_head sports;
     struct prog *prog;
-    vpn_t *vpn;
+    tun_t *tun;
     int set_route;
+    int           is_server;
 } lsquic_vpn_ctx_t;
 
 
@@ -121,8 +124,7 @@ struct lsquic_stream_ctx {
     int                  retry;
 };
 
-int addr_init(vpn_t *vpn, int tun_sum);
-int vpn_init(vpn_ctx_t *vpn, int server_flag);
+int tun_init(tun_t *tun);
 void lsquic_conn_ctx_init(struct lsquic_conn_ctx   *conn_h);
 void vpn_tun_write(vpn_ctx_t *vpn_ctx);
 void tun_read_handler(int fd, short event, void *ctx);

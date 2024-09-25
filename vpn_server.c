@@ -37,7 +37,6 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
 {
     lsquic_conn_ctx_t *conn_h = lsquic_conn_get_ctx(conn);
     vpn_ctx_t *vpn_ctx = conn_h->vpn_ctx;
-    vpn_t *vpn = vpn_ctx->vpn;
 
     if (conn_h->lsquic_vpn_ctx->n_conn)
     {
@@ -51,10 +50,7 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
         LSQ_NOTICE("Connection closed");
     TAILQ_REMOVE(&conn_h->lsquic_vpn_ctx->conn_ctxs, conn_h, next_connh);
 
-    if(vpn_ctx->addr_index != -1)
-        vpn->addrs[vpn_ctx->addr_index]->is_used = 0;
-
-    close(vpn_ctx->tun_fd);
+    vpn_ctx->tun->is_used = 0;
 
     if (vpn_ctx->tun_read_ev)
     {
@@ -72,8 +68,6 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
         event_del(conn_h->write_conn_ev);
         event_free(conn_h->write_conn_ev);
     }
-
-    free(vpn_ctx);
 
     lsquic_conn_set_ctx(conn, NULL);
     free(conn_h);
@@ -104,15 +98,13 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 {
     lsquic_conn_ctx_t *conn_h;
     vpn_ctx_t *vpn_ctx;
-    vpn_t *vpn;
-    vpn_tun_addr_t *addr;
-    ssize_t addr_index, len, buf_used;
+    tun_t *tun;
+    ssize_t len, buf_used;
     char * cur_buf;
     int fd;
 
     conn_h = st_h->conn_h;
     vpn_ctx = conn_h->vpn_ctx;
-    vpn = vpn_ctx->vpn;
     cur_buf = vpn_ctx->packet_buf + vpn_ctx->buf_off;
     buf_used =  vpn_ctx->packet_buf - vpn_ctx->buf + vpn_ctx->buf_off;
 
@@ -126,37 +118,31 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
     LSQ_INFO("read from stream %llu: %zd bytes, bufsize: %zu", lsquic_stream_id(stream), len, BUFF_SIZE - buf_used);
     
-    if(vpn_ctx->tun_fd == -1){
-        LSQ_INFO("say Hello: %s", cur_buf);
-        addr_index = 0;
+    if(vpn_ctx->tun == NULL){
+        LSQ_INFO("client for %s", cur_buf);
 
-        while(addr_index < vpn->max_conn && vpn->addrs[addr_index]->is_used == 1  ){
-            addr_index++;
+        tun = st_h->lsquic_vpn_ctx->tun;
+
+        while(tun != NULL){
+            if (strcmp(tun->local_tun_ip, cur_buf) == 0 && tun->is_used == 0){
+                break;
+            }
+            tun = tun->next;
         }
 
-        if(addr_index >= vpn->max_conn){
-            LSQ_WARN("have no addr");
+        if(tun == NULL) {
             goto end;
         }
 
-        vpn_ctx->addr_index = addr_index;
-        vpn_ctx->local_tun_ip = vpn->addrs[addr_index]->local_ip;
-        vpn_ctx->remote_tun_ip = vpn->addrs[addr_index]->remote_ip;
-
-        LSQ_INFO("Initialization of the new link address was successful :index: %d,local ip: %s, remote_ip: %s",
-            vpn_ctx->addr_index,
-            vpn_ctx->local_tun_ip, 
-            vpn_ctx->remote_tun_ip
+        vpn_ctx->tun = tun;
+        LSQ_INFO("Initialization of the new link address was successful :local ip: %s, remote_ip: %s",
+            tun->local_tun_ip, 
+            tun->remote_tun_ip
         );
-        len = sprintf(st_h->buf, "%s,%s\n", vpn_ctx->remote_tun_ip, vpn_ctx->local_tun_ip);
+        len = sprintf(st_h->buf, "%s", "server is ok");
         st_h->buf_off = len;
+        vpn_ctx->tun_fd = tun->fd;
 
-        if(vpn_init(vpn_ctx, IS_SERVER) == -1) {
-            LSQ_ERROR("cannot create tun");
-            goto end;
-        }
-
-        vpn->addrs[addr_index]->is_used = 1;
         vpn_ctx->tun_read_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
         vpn_ctx->tun_write_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
@@ -222,11 +208,10 @@ main (int argc, char **argv)
     int opt, s;
     struct prog prog;
     lsquic_vpn_ctx_t lsquic_vpn_ctx;
-    vpn_t     vpn;
 
     memset(&lsquic_vpn_ctx, 0, sizeof(lsquic_vpn_ctx));
     lsquic_vpn_ctx.prog = &prog;
-    lsquic_vpn_ctx.vpn= &vpn;
+    lsquic_vpn_ctx.is_server = 1;
     TAILQ_INIT(&lsquic_vpn_ctx.sports);
     TAILQ_INIT(&lsquic_vpn_ctx.conn_ctxs);
 
@@ -245,12 +230,6 @@ main (int argc, char **argv)
         case 'c':
             prog_parse_config_file(&prog, optarg);
         }
-    }
-
-
-    if(addr_init(&vpn, 5) <= 0){ 
-        LSQ_ERROR("vpn init error");
-        exit(EXIT_FAILURE);
     }
 
     add_alpn("echo");
