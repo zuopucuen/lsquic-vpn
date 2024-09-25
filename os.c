@@ -25,6 +25,7 @@ int tun_create(char if_name[IFNAMSIZ])
         return -1;
     }
     ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+    snprintf(ifr.ifr_name, IFNAMSIZ, "%s", "");
     if (ioctl(fd, TUNSETIFF, &ifr) != 0) {
         err = errno;
         (void) close(fd);
