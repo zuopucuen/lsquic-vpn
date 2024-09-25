@@ -13,7 +13,7 @@ ssize_t safe_read_partial(const int fd, void *const buf_, const size_t max_count
 }
 
 #ifdef __linux__
-int tun_create(char if_name[IFNAMSIZ], const char *wanted_name)
+int tun_create(char if_name[IFNAMSIZ])
 {
     struct ifreq ifr;
     int          fd;
@@ -25,7 +25,6 @@ int tun_create(char if_name[IFNAMSIZ], const char *wanted_name)
         return -1;
     }
     ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
-    snprintf(ifr.ifr_name, IFNAMSIZ, "%s", wanted_name == NULL ? "" : wanted_name);
     if (ioctl(fd, TUNSETIFF, &ifr) != 0) {
         err = errno;
         (void) close(fd);
