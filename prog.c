@@ -232,10 +232,10 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                 tun->ext_gw_ip = get_default_gw_ip();
 
                 if(prog->lsquic_vpn_ctx->tun == NULL){
-                    prog->lsquic_vpn_ctx->tun = tun;
-                }else{
-                    prog->lsquic_vpn_ctx->tun->next = tun;
+                    tun->next = prog->lsquic_vpn_ctx->tun;
                 }
+                
+                prog->lsquic_vpn_ctx->tun = tun;
 
                 if(prog->lsquic_vpn_ctx->is_server){
                     tun->local_tun_ip = value;
