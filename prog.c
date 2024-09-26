@@ -196,7 +196,7 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
             }else if (strcmp("set_route", key) == 0){
                 if (strcmp("yes", value) == 0){
                     prog->lsquic_vpn_ctx->set_route = 1;
-                }else{
+                }else if (strcmp("no", value) != 0){
                     perror("value error, please use 'yes' or 'no'");
                     return 1;
                 }
