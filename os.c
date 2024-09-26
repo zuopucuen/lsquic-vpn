@@ -382,19 +382,14 @@ Cmds firewall_rules_cmds(int is_server, int set_route)
         static const char *set_cmds[] =
                 { "ip link set dev $IF_NAME up",
                   "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
-                  "route add -host $EXT_IP gw $EXT_GW_IP",
                   NULL };
-        static const char *unset_cmds[] = 
-                { "route delete -host $EXT_IP",
-                NULL };
+        static const char *unset_cmds[] = { NULL };
 
 #elif defined(__APPLE__)
         static const char *set_cmds[] =
                 { "ifconfig $IF_NAME $LOCAL_TUN_IP $REMOTE_TUN_IP up",
                  NULL };
-        static const char *unset_cmds[] = 
-                { "route delete $EXT_IP", 
-                NULL };
+        static const char *unset_cmds[] = { NULL };
 #endif
 
         return (Cmds){ set_cmds, unset_cmds };
