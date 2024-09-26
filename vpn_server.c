@@ -50,7 +50,8 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
         LSQ_NOTICE("Connection closed");
     TAILQ_REMOVE(&conn_h->lsquic_vpn_ctx->conn_ctxs, conn_h, next_connh);
 
-    vpn_ctx->tun->is_used = 0;
+    if(vpn_ctx->tun != NULL)
+        vpn_ctx->tun->is_used = 0;
 
     if (vpn_ctx->tun_read_ev)
     {
