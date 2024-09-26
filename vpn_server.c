@@ -136,6 +136,8 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         }
 
         vpn_ctx->tun = tun;
+        tun->is_used = 1;
+        
         LSQ_INFO("Initialization of the new link address was successful :local ip: %s, remote_ip: %s",
             tun->local_tun_ip, 
             tun->remote_tun_ip
