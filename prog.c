@@ -222,6 +222,7 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
 
                 tun = malloc(sizeof(tun_t));
                 memset(tun, 0, sizeof(tun_t));
+                tun->is_server = prog->lsquic_vpn_ctx->is_server;
 
                 sport = TAILQ_LAST(prog->prog_sports, sport_head);
                 tun->server_ip = sport->host;
