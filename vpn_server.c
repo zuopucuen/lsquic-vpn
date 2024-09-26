@@ -71,6 +71,7 @@ vpn_server_on_conn_closed (lsquic_conn_t *conn)
     }
 
     lsquic_conn_set_ctx(conn, NULL);
+    free(vpn_ctx);
     free(conn_h);
 }
 
