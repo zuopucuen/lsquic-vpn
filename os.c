@@ -431,20 +431,33 @@ void daemonize() {
     if (pid < 0) {
         // 错误处理
         perror("fork failed");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
  
     if (pid > 0) {
         // 父进程退出
-        exit(0);
+        exit(EXIT_SUCCESS);
     }
  
     // 子进程继续运行
     if (setsid() < 0) {
         // 错误处理
         perror("setsid failed");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
+
+    // 第二次 fork，确保不会再重新获得控制终端
+    pid = fork();
+    if (pid < 0) {
+        perror("fork failed");
+        exit(EXIT_FAILURE);
+    }
+    if (pid > 0) {
+        exit(EXIT_SUCCESS); // 父进程退出
+    }
+
+    // 更改文件权限掩码
+    umask(0);
  
     // 此时已是新的会话组长和进程组长，但仍与控制终端相关
     // 改变当前工作目录，防止卸载文件系统
@@ -464,15 +477,4 @@ void daemonize() {
     open("/dev/null", O_RDONLY);
     open("/dev/null", O_RDWR);
     open("/dev/null", O_RDWR);
- 
-    // 守护进程的主要工作
-    while(1) {
-        // 示例：每10秒钟记录当前时间
-        time_t now;
-        time(&now);
-        printf("Daemon is running. Current time is %ld\n", now);
-        sleep(10);
-    }
- 
-    exit(0);
 }
