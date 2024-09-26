@@ -29,7 +29,7 @@ int tun_init(tun_t *tun) {
 
     tun->firewall_rules_set = -1;
 
-    if (firewall_rules(tun, 1, 0, 1) != 0) {
+    if (firewall_rules(tun, 1, 0) != 0) {
         LSQ_ERROR("set Firewall rules faile");
         return -1;
     }

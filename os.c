@@ -394,22 +394,22 @@ Cmds firewall_rules_cmds(int is_server, int set_route)
     }
 }
 
-int firewall_rules(tun_t *vpn, int set, int silent, int set_route)
+int firewall_rules(tun_t *tun, int set, int silent)
 {
-    const char *       substs[][2] = { { "$LOCAL_TUN_IP", vpn->local_tun_ip },
-                                { "$REMOTE_TUN_IP", vpn->remote_tun_ip },
-                                { "$IF_NAME", vpn->if_name },
-                                { "$EXT_IP", vpn->server_ip },
-                                { "$EXT_GW_IP", vpn->ext_gw_ip },
+    const char *       substs[][2] = { { "$LOCAL_TUN_IP", tun->local_tun_ip },
+                                { "$REMOTE_TUN_IP", tun->remote_tun_ip },
+                                { "$IF_NAME", tun->if_name },
+                                { "$EXT_IP", tun->server_ip },
+                                { "$EXT_GW_IP", tun->ext_gw_ip },
                                 { NULL, NULL } };
     const char *const *cmds;
     size_t             i;
 
-    if (vpn->firewall_rules_set == set) {
+    if (tun->firewall_rules_set == set) {
         return 0;
     }
-    if ((cmds = (set ? firewall_rules_cmds(vpn->is_server, set_route).set
-                     : firewall_rules_cmds(vpn->is_server, set_route).unset)) == NULL) {
+    if ((cmds = (set ? firewall_rules_cmds(tun->is_server, tun->set_route).set
+                     : firewall_rules_cmds(tun->is_server, tun->set_route).unset)) == NULL) {
         LSQ_ERROR("Routing commands for that operating system have not been "
                 "added yet.\n");
         return 0;
@@ -420,7 +420,7 @@ int firewall_rules(tun_t *vpn, int set, int silent, int set_route)
             return -1;
         }
     }
-    vpn->firewall_rules_set = set;
+    tun->firewall_rules_set = set;
     return 0;
 }
  

@@ -65,23 +65,18 @@ typedef struct tun_s {
     char *  server_ip;
     const char *  ext_gw_ip;
     int           fd;
-    int     is_used;
     char          if_name[IFNAMSIZ];
     int           firewall_rules_set;
     int           is_server;
+    int           set_route;
+    int           is_used;
     void *next;
 }tun_t;
 
 
 typedef struct vpn_ctx_s {
-    //char *  local_tun_ip;
-    //char *  remote_tun_ip;
-    //char *  server_ip;
-    //const char *  ext_gw_ip;
-    //char          if_name[IFNAMSIZ];
     int           is_server;
     int           tun_fd;
-    //int           firewall_rules_set;
     tun_t  *tun;
     char * packet_buf;
     char          buf[BUFF_SIZE];

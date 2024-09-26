@@ -111,7 +111,6 @@ void
 prog_print_common_options (const struct prog *prog, FILE *out)
 {
     fprintf(out,
-"   -d          enable daemon\n"
 "   -c          configure file\n"
 "   -h          Print this help screen and exit\n"
     );
@@ -187,17 +186,20 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                 value[value_length] = '\0';
             }
 
-            //printf("键: %s, 值: %s\n", key, value);
-
             if (strcmp("server", key) == 0){
                 if (0 == (prog->prog_engine_flags & LSENG_SERVER) &&
                                             !TAILQ_EMPTY(prog->prog_sports)){
                     perror("server addr or port error");
                     return 1;
                 }
-                prog_add_sport(prog, value);
-                
-
+                prog_add_sport(prog, value);  
+            }else if (strcmp("set;_route", key) == 0){
+                if (strcmp("yes", value) == 0){
+                    prog->lsquic_vpn_ctx->set_route = 1;
+                }else{
+                    perror("value error, please use 'yes' or 'no'");
+                    return 1;
+                }
             }else if (strcmp("cert", key) == 0){
                 prog->cert_file = value;
             }else if (strcmp("key", key) == 0){
@@ -223,6 +225,7 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                 tun = malloc(sizeof(tun_t));
                 memset(tun, 0, sizeof(tun_t));
                 tun->is_server = prog->lsquic_vpn_ctx->is_server;
+                tun->set_route = prog->lsquic_vpn_ctx->set_route;
 
                 sport = TAILQ_LAST(prog->prog_sports, sport_head);
                 tun->server_ip = sport->host;

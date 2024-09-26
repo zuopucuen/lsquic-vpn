@@ -40,7 +40,7 @@ vpn_client_on_conn_closed (lsquic_conn_t *conn)
     lsquic_conn_ctx_t *conn_h = lsquic_conn_get_ctx(conn);
     vpn_ctx_t * vpn_ctx = conn_h->vpn_ctx;
 
-    if (firewall_rules(vpn_ctx->tun, 0, 0, conn_h->lsquic_vpn_ctx->set_route) != 0) {
+    if (firewall_rules(vpn_ctx->tun, 0, 0) != 0) {
         LSQ_ERROR("set Firewall rules faile");
     }
 
@@ -175,14 +175,13 @@ main (int argc, char **argv)
     prog.prog_api.ea_alpn = "echo";
     prog.lsquic_vpn_ctx = &lsquic_vpn_ctx;
 
-    while (-1 != (opt = getopt(argc, argv, "hdc:" )))
+    while (-1 != (opt = getopt(argc, argv, "hc:" )))
     {
         switch (opt) {
         case 'h':
             usage(argv[0]);
             prog_print_common_options(&prog, stdout);
             exit(0);
-        case 'd':
         case 'c':
             prog_parse_config_file(&prog, optarg);
         }
@@ -193,6 +192,7 @@ main (int argc, char **argv)
         LSQ_ERROR("could not prep");
         exit(EXIT_FAILURE);
     }
+
     if (0 != prog_connect(&prog, NULL, 0))
     {
         LSQ_ERROR("could not connect");

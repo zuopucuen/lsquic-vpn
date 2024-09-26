@@ -137,7 +137,7 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
         vpn_ctx->tun = tun;
         tun->is_used = 1;
-        
+
         LSQ_INFO("Initialization of the new link address was successful :local ip: %s, remote_ip: %s",
             tun->local_tun_ip, 
             tun->remote_tun_ip
@@ -222,14 +222,13 @@ main (int argc, char **argv)
                                         &server_vpn_stream_if, &lsquic_vpn_ctx);
     prog.lsquic_vpn_ctx = &lsquic_vpn_ctx;
 
-    while (-1 != (opt = getopt(argc, argv, "hdc:" )))
+    while (-1 != (opt = getopt(argc, argv, "hc:" )))
     {
         switch (opt) {
         case 'h':
             usage(argv[0]);
             prog_print_common_options(&prog, stdout);
             exit(0);
-        case 'd':
         case 'c':
             prog_parse_config_file(&prog, optarg);
         }
