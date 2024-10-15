@@ -1,14 +1,6 @@
 #include "vpn.h"
 #include "os.h"
 
-static void hex_to_ip(u_int32_t hex, char *ip){
-    snprintf(ip, 16, "%d.%d.%d.%d",
-             (hex >> 24) & 0xFF,
-             (hex >> 16) & 0xFF,
-             (hex >> 8) & 0xFF,
-             hex & 0xFF);
-}
-
 int tun_init(tun_t *tun) {
     tun->fd = tun_create(tun->if_name);
     
