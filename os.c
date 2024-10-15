@@ -356,7 +356,7 @@ Cmds firewall_rules_cmds(int is_server, int set_route)
                 { "ip link set dev $IF_NAME up",
                   "ip addr add $LOCAL_TUN_IP peer $REMOTE_TUN_IP dev $IF_NAME",
                   "route add -host $EXT_IP gw $EXT_GW_IP",
-                  "route add default gw $REMOTE_TUN_IP metric 1", 
+                  "route add default gw $REMOTE_TUN_IP metric 0", 
                   NULL };
         static const char *unset_cmds[] = 
                 { "route delete default gw $REMOTE_TUN_IP", 

@@ -208,7 +208,7 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                 prog->ca_file = value;
             }else if (strcmp("log_file", key) == 0){
                 FILE *log_file;
-                log_file = fopen(value, "wb");
+                log_file = fopen(value, "wb+");
                 if (file == NULL) {
                     perror("Error opening file");
                     return 1;
