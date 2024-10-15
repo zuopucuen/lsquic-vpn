@@ -5,7 +5,7 @@
 
 ssize_t safe_read_partial(const int fd, void *const buf_, const size_t max_count);
 
-typedef struct Cmds {
+typedef struct {
     const char *const *set;
     const char *const *unset;
 } Cmds;
@@ -28,6 +28,6 @@ ssize_t tun_read(int fd, void *data, size_t size);
 
 ssize_t tun_write(int fd, const void *data, size_t size);
 
-void daemonize();
+void daemonize(void);
 
-#endif
+#endif  // os_H

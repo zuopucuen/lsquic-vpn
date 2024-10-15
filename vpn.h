@@ -60,75 +60,72 @@
 #define STREAM_WRITE_RETRY_TIME 1000 // ms
 
 typedef struct tun_s {
-    char *  local_tun_ip;
-    char *  remote_tun_ip;
-    char *  server_ip;
-    const char *  ext_gw_ip;
-    int           fd;
-    char          if_name[IFNAMSIZ];
-    int           firewall_rules_set;
-    int           is_server;
-    int           set_route;
-    int           is_used;
+    char *local_tun_ip;
+    char *remote_tun_ip;
+    char *server_ip;
+    const char *ext_gw_ip;
+    int fd;
+    char if_name[IFNAMSIZ];
+    int firewall_rules_set;
+    int is_server;
+    int set_route;
+    int is_used;
     void *next;
-}tun_t;
-
+} tun_t;
 
 typedef struct vpn_ctx_s {
-    int           is_server;
-    int           tun_fd;
-    tun_t  *tun;
-    char * packet_buf;
-    char          buf[BUFF_SIZE];
-    ssize_t        buf_off;
-    struct event        *tun_read_ev;
-    struct event        *tun_write_ev;
-    lsquic_conn_ctx_t * conn_h;
-
+    int is_server;
+    int tun_fd;
+    tun_t *tun;
+    char *packet_buf;
+    char buf[BUFF_SIZE];
+    ssize_t buf_off;
+    struct event *tun_read_ev;
+    struct event *tun_write_ev;
+    lsquic_conn_ctx_t *conn_h;
 } vpn_ctx_t;
 
 typedef struct lsquic_vpn_ctx_s {
-    TAILQ_HEAD(, lsquic_conn_ctx)   conn_ctxs;
-    struct lsquic_conn_ctx  *conn_h;
+    TAILQ_HEAD(, lsquic_conn_ctx) conn_ctxs;
+    struct lsquic_conn_ctx *conn_h;
     int n_conn;
     struct sport_head sports;
     struct prog *prog;
     tun_t *tun;
     int set_route;
-    int           is_server;
+    int is_server;
 } lsquic_vpn_ctx_t;
 
+typedef struct lsquic_conn_ctx {
+    TAILQ_ENTRY(lsquic_conn_ctx) next_connh;
+    lsquic_conn_t *conn;
+    lsquic_vpn_ctx_t *lsquic_vpn_ctx;
+    vpn_ctx_t *vpn_ctx;
+    struct event *write_conn_ev;
+    struct timeval write_conn_ev_timeout;
+} lsquic_conn_ctx_t;
 
-struct lsquic_conn_ctx {
-    TAILQ_ENTRY(lsquic_conn_ctx)    next_connh;
-    lsquic_conn_t       *conn;
-    lsquic_vpn_ctx_t   *lsquic_vpn_ctx;
-    vpn_ctx_t           *vpn_ctx;
-    struct event        *write_conn_ev;
-    struct timeval      write_conn_ev_timeout;
-};
-
-struct lsquic_stream_ctx {
-    lsquic_stream_t     *stream;
-    lsquic_conn_ctx_t   *conn_h;
-    lsquic_vpn_ctx_t    *lsquic_vpn_ctx;
-    char                 buf[BUFF_SIZE];
-    ssize_t              buf_off;
-    char                *packet_buf;
-    ssize_t              packet_remaining;
-    int                  retry;
-};
+typedef struct lsquic_stream_ctx {
+    lsquic_stream_t *stream;
+    lsquic_conn_ctx_t *conn_h;
+    lsquic_vpn_ctx_t *lsquic_vpn_ctx;
+    char buf[BUFF_SIZE];
+    ssize_t buf_off;
+    char *packet_buf;
+    ssize_t packet_remaining;
+    int retry;
+} lsquic_stream_ctx_t;
 
 int tun_init(tun_t *tun);
-void lsquic_conn_ctx_init(struct lsquic_conn_ctx   *conn_h);
+void lsquic_conn_ctx_init(struct lsquic_conn_ctx *conn_h);
 void vpn_tun_write(vpn_ctx_t *vpn_ctx);
 void tun_read_handler(int fd, short event, void *ctx);
 void tun_write_handler(int fd, short event, void *ctx);
-void vpn_on_write (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h);
-lsquic_stream_ctx_t *vpn_on_new_stream (void *stream_if_ctx, lsquic_stream_t *stream);
+void vpn_on_write(lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h);
+lsquic_stream_ctx_t *vpn_on_new_stream(void *stream_if_ctx, lsquic_stream_t *stream);
 void vpn_stream_write_handler(int fd, short event, void *ctx);
 
 extern volatile sig_atomic_t exit_signal_received;
-extern void vpn_after_new_stream(lsquic_stream_ctx_t * st_h);
+extern void vpn_after_new_stream(lsquic_stream_ctx_t *st_h);
 
-#endif
+#endif // vpn_H
