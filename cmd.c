@@ -83,7 +83,7 @@ int execute_command(const char *command, char *output, size_t output_size) {
 }
 
 // 添加命令到命令数组，支持可变参数
-void add_command_to_array(command_array_t *cmd_array, const char *command_template, int var_count, ...) {
+void add_command_to_array(command_array_t *cmd_array, const char *command_template, ...) {
     if (cmd_array->current_command_count >= cmd_array->max_command_count) {
         fprintf(stderr, "Error: Command array is full. Cannot add more commands.\n");
         return;
@@ -94,19 +94,15 @@ void add_command_to_array(command_array_t *cmd_array, const char *command_templa
         return;
     }
 
-    char command[BUFFER_SIZE] = {0}; // 用于拼接命令
+    char command[COMMAND_BUFFER_SIZE] = {0}; // 用于拼接命令
 
     // 可变参数处理
     va_list args;
-    va_start(args, var_count);
+    va_start(args, command_template);
     
-    // 拼接命令
-    if (var_count > 0) {
-        vsnprintf(command, sizeof(command), command_template, args);
-    } else {
-        snprintf(command, sizeof(command), "%s", command_template);  // 无变量时直接使用模板
-    }
-    
+    // 拼接命令，使用 vsnprintf 来处理可变参数
+    vsnprintf(command, sizeof(command), command_template, args);
+
     va_end(args);
 
     cmd_array->commands[cmd_array->current_command_count] = strdup(command);
@@ -121,7 +117,8 @@ void add_command_to_array(command_array_t *cmd_array, const char *command_templa
 // 按顺序执行命令数组中的所有命令
 void execute_commands_in_order(command_array_t *cmd_array) {
     for (int i = 0; i < cmd_array->current_command_count; ++i) {
-        char output[BUFFER_SIZE];
+        char output[COMMAND_BUFFER_SIZE];
+        printf("Command: %s\n", cmd_array->commands[i]);
         if (execute_command(cmd_array->commands[i], output, sizeof(output)) == 0) {
             // 仅在成功时执行，输出可以在这里处理
         }

@@ -66,9 +66,9 @@ typedef struct tun_s {
     const char *ext_gw_ip;
     int fd;
     char if_name[IFNAMSIZ];
-    int firewall_rules_set;
+    int route_set;
     int is_server;
-    int set_route;
+    int change_default_gw;
     int is_used;
     void *next;
 } tun_t;
@@ -92,7 +92,7 @@ typedef struct lsquic_vpn_ctx_s {
     struct sport_head sports;
     struct prog *prog;
     tun_t *tun;
-    int set_route;
+    int change_default_gw;
     int is_server;
 } lsquic_vpn_ctx_t;
 
@@ -116,6 +116,9 @@ typedef struct lsquic_stream_ctx {
     int retry;
 } lsquic_stream_ctx_t;
 
+const char *get_default_gw_ip(void);
+const char *get_default_ext_if_name(void);
+int tun_route_set(tun_t *tun, int set);
 int tun_init(tun_t *tun);
 void lsquic_conn_ctx_init(struct lsquic_conn_ctx *conn_h);
 void vpn_tun_write(vpn_ctx_t *vpn_ctx);
@@ -127,5 +130,4 @@ void vpn_stream_write_handler(int fd, short event, void *ctx);
 
 extern volatile sig_atomic_t exit_signal_received;
 extern void vpn_after_new_stream(lsquic_stream_ctx_t *st_h);
-
 #endif // vpn_H

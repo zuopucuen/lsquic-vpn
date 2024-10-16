@@ -1,5 +1,300 @@
 #include "vpn.h"
-#include "os.h"
+#include "cmd.h"
+
+const char *get_default_gw_ip(void)
+{
+    static char default_gw_ip[32];
+#if defined(__APPLE__)
+    char *cmd = "route -n get default 2>/dev/null|awk '/gateway:/{print $2;exit}'";
+#else
+    char *cmd = "ip route show default 2>/dev/null|awk '/default/{print $3;exit}'";
+#endif
+
+    if (execute_command(cmd, default_gw_ip, sizeof(default_gw_ip)) == 0) {
+        return default_gw_ip;
+    }
+
+    execute_command("ps -ef ", default_gw_ip, sizeof(default_gw_ip));
+
+    return NULL;
+}
+
+const char *get_default_ext_if_name(void)
+{
+    static char if_name[64];
+#if defined(__APPLE__)
+    char *cmd = "route -n get default 2>/dev/null|awk '/interface:/{print $2;exit}'";
+#else
+    char *cmd = "ip route show default 2>/dev/null|awk '/default/{print $5}'";
+#endif
+
+    if (execute_command(cmd, if_name, sizeof(if_name)) == 0) {
+        return if_name;
+    }
+
+    return NULL;
+}
+
+int tun_route_set(tun_t *tun, int set)
+{
+    int i;
+    command_array_t cmd_array;
+
+    if (tun->route_set == set) {
+        return 0;
+    }
+
+    init_command_array(&cmd_array, 10);
+
+    if (set) {
+        if (tun->is_server) {
+#if defined(__APPLE__)
+            add_command_to_array(&cmd_array, "ifconfig %s %s %s up", tun->if_name, tun->local_tun_ip, tun->remote_tun_ip);
+#else
+            add_command_to_array(&cmd_array, "ip link set dev %s up", tun->if_name);
+            add_command_to_array(&cmd_array, "ip addr add %s peer %s dev %s", tun->local_tun_ip, tun->remote_tun_ip, tun->if_name);    
+#endif
+        } else {
+#if defined(__APPLE__)
+            add_command_to_array(&cmd_array, "ifconfig %s %s %s up", tun->if_name, tun->local_tun_ip, tun->remote_tun_ip);
+#else
+            add_command_to_array(&cmd_array, "ip link set dev %s up", tun->if_name);
+            add_command_to_array(&cmd_array, "ip addr add %s peer %s dev %s", tun->local_tun_ip, tun->remote_tun_ip, tun->if_name);    
+#endif
+            if (tun->change_default_gw){
+#if defined(__APPLE__)
+                add_command_to_array(&cmd_array,"route add %s %s", tun->server_ip, tun->ext_gw_ip);
+                add_command_to_array(&cmd_array, "route change default %s", tun->remote_tun_ip);
+#else
+                add_command_to_array(&cmd_array, "route add -host %s gw %s", tun->server_ip, tun->ext_gw_ip);
+                add_command_to_array(&cmd_array, "route add default gw %s metric 0", tun->remote_tun_ip);
+#endif
+            }
+        }
+    } else if (!tun->is_server && tun->change_default_gw) {
+#if defined(__APPLE__)
+        add_command_to_array(&cmd_array, "route delete %s", tun->server_ip);
+        add_command_to_array(&cmd_array, "route change default  %s", tun->ext_gw_ip);
+#else
+        add_command_to_array(&cmd_array, "route delete -host %s", tun->server_ip);
+        add_command_to_array(&cmd_array, "route delete default gw %s", tun->remote_tun_ip);
+#endif
+    }
+
+    execute_commands_in_order(&cmd_array);
+    free_command_array(&cmd_array);
+
+    tun->route_set = set;
+
+    return 0;
+}
+
+ssize_t safe_read_partial(const int fd, void *const buf_, const size_t max_count)
+{
+    unsigned char *const buf = (unsigned char *) buf_;
+    ssize_t              readnb;
+
+    while ((readnb = read(fd, buf, max_count)) < (ssize_t) 0 && errno == EINTR);
+    return readnb;
+}
+
+#ifdef __linux__
+int tun_create(char if_name[IFNAMSIZ])
+{
+    struct ifreq ifr;
+    int          fd;    
+    int          err;
+
+    fd = open("/dev/net/tun", O_RDWR);
+    if (fd == -1) {
+        fprintf(stderr, "tun module not present. See https://sk.tl/2RdReigK\n");
+        return -1;
+    }
+    ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+    snprintf(ifr.ifr_name, IFNAMSIZ, "%s", "");
+    if (ioctl(fd, TUNSETIFF, &ifr) != 0) {
+        err = errno;
+        (void) close(fd);
+        errno = err;
+        return -1;
+    }
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl(F_GETFL)");
+        close(fd);
+        return -1;
+    }
+
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl(F_SETFL)");
+        close(fd);
+        return -1;
+    }
+
+    snprintf(if_name, IFNAMSIZ, "%s", ifr.ifr_name);
+
+    return fd;
+}
+#elif defined(__APPLE__)
+static int tun_create_by_id(char if_name[IFNAMSIZ], unsigned int id)
+{
+    struct ctl_info     ci;
+    struct sockaddr_ctl sc;
+    int                 err;
+    int                 fd;
+
+    if ((fd = socket(PF_SYSTEM, SOCK_DGRAM, SYSPROTO_CONTROL)) == -1) {
+        return -1;
+    }
+    memset(&ci, 0, sizeof ci);
+    snprintf(ci.ctl_name, sizeof ci.ctl_name, "%s", UTUN_CONTROL_NAME);
+    if (ioctl(fd, CTLIOCGINFO, &ci)) {
+        err = errno;
+        (void) close(fd);
+        errno = err;
+        return -1;
+    }
+    memset(&sc, 0, sizeof sc);
+    sc = (struct sockaddr_ctl){
+        .sc_id      = ci.ctl_id,
+        .sc_len     = sizeof sc,
+        .sc_family  = AF_SYSTEM,
+        .ss_sysaddr = AF_SYS_CONTROL,
+        .sc_unit    = id + 1,
+    };
+    if (connect(fd, (struct sockaddr *) &sc, sizeof sc) != 0) {
+        err = errno;
+        (void) close(fd);
+        errno = err;
+        return -1;
+    }
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl(F_GETFL)");
+        close(fd);
+        return -1;
+    }
+    
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl(F_SETFL)");
+        close(fd);
+        return -1;
+    }
+
+    snprintf(if_name, IFNAMSIZ, "utun%u", id);
+
+    return fd;
+}
+
+int tun_create(char if_name[IFNAMSIZ])
+{
+    unsigned int id;
+    int          fd;
+
+
+    for (id = 0; id < 32; id++) {
+        if ((fd = tun_create_by_id(if_name, id)) != -1) {
+            return fd;
+        }
+    }
+    return -1;
+}
+#endif
+
+int tun_set_mtu(const char *if_name, int mtu)
+{
+    struct ifreq ifr;
+    int          fd;
+
+    if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+        return -1;
+    }
+    ifr.ifr_mtu = mtu;
+    snprintf(ifr.ifr_name, IFNAMSIZ, "%s", if_name);
+    if (ioctl(fd, SIOCSIFMTU, &ifr) != 0) {
+        close(fd);
+        return -1;
+    }
+    return close(fd);
+}
+
+#if defined(__linux__)
+ssize_t tun_read(int fd, void *buf, size_t size)
+{
+    ssize_t len;
+
+    while ((len = read(fd, buf, size)) < (ssize_t) 0 && errno == EINTR);
+    return len;
+}
+
+ssize_t tun_write(int fd, const void *buf, size_t size)
+{
+    ssize_t len;
+    
+    while ((len = write(fd, buf, size)) < (ssize_t) 0 && errno == EINTR);
+    return len;
+}
+
+#else
+ssize_t tun_read(int fd, void *data, size_t size)
+{
+    ssize_t  ret;
+    uint32_t family;
+
+    struct iovec iov[2] = {
+        {
+            .iov_base = &family,
+            .iov_len  = sizeof family,
+        },
+        {
+            .iov_base = data,
+            .iov_len  = size,
+        },
+    };
+
+    ret = readv(fd, iov, 2);
+    if (ret <= (ssize_t) 0) {
+        return -1;
+    }
+    if (ret <= (ssize_t) sizeof family) {
+        return 0;
+    }
+    return ret - sizeof family;
+}
+
+ssize_t tun_write(int fd, const void *data, size_t size)
+{
+    uint32_t family;
+    ssize_t  ret;
+
+    if (size < 20) {
+        return 0;
+    }
+
+    family = htonl(AF_INET);
+
+    struct iovec iov[2] = {
+        {
+            .iov_base = &family,
+            .iov_len  = sizeof family,
+        },
+        {
+            .iov_base = (void *) data,
+            .iov_len  = size,
+        },
+    };
+    ret = writev(fd, iov, 2);
+    if (ret <= (ssize_t) 0) {
+        return ret;
+    }
+    if (ret <= (ssize_t) sizeof family) {
+        return 0;
+    }
+    return ret - sizeof family;
+}
+#endif
 
 int tun_init(tun_t *tun) {
     tun->fd = tun_create(tun->if_name);
@@ -18,9 +313,9 @@ int tun_init(tun_t *tun) {
         LSQ_ERROR("cannot set mtu: %d", DEFAULT_MTU);
     }
 
-    tun->firewall_rules_set = -1;
+    tun->route_set = -1;
 
-    if (firewall_rules(tun, 1, 0) != 0) {
+    if (tun_route_set(tun, 1) != 0) {
         LSQ_ERROR("set Firewall rules failed");
         return -1;
     }

@@ -17,7 +17,6 @@
 #include <event2/event.h>
 
 #include "vpn.h"
-#include "os.h"
 
 static lsquic_conn_ctx_t *
 vpn_client_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
@@ -40,7 +39,7 @@ vpn_client_on_conn_closed (lsquic_conn_t *conn)
     lsquic_conn_ctx_t *conn_h = lsquic_conn_get_ctx(conn);
     vpn_ctx_t * vpn_ctx = conn_h->vpn_ctx;
 
-    if (firewall_rules(vpn_ctx->tun, 0, 0) != 0) {
+    if (tun_route_set(vpn_ctx->tun, 0) != 0) {
         LSQ_ERROR("set Firewall rules faile");
     }
 

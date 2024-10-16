@@ -13,7 +13,6 @@
 #include <netinet/in.h>
 
 #include "vpn.h"
-#include "os.h"
 
 static lsquic_conn_ctx_t *
 vpn_server_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)

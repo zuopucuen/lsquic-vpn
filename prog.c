@@ -26,7 +26,6 @@
 #include "common.h"
 #include "prog.h"
 #include "vpn.h"
-#include "os.h"
 
 static int prog_stopped;
 static const char *s_keylog_dir;
@@ -193,9 +192,9 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                     return 1;
                 }
                 prog_add_sport(prog, value);  
-            }else if (strcmp("set_route", key) == 0){
+            }else if (strcmp("change_default_gw", key) == 0){
                 if (strcmp("yes", value) == 0){
-                    prog->lsquic_vpn_ctx->set_route = 1;
+                    prog->lsquic_vpn_ctx->change_default_gw = 1;
                 }else if (strcmp("no", value) != 0){
                     perror("value error, please use 'yes' or 'no'");
                     return 1;
@@ -225,7 +224,7 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                 tun = malloc(sizeof(tun_t));
                 memset(tun, 0, sizeof(tun_t));
                 tun->is_server = prog->lsquic_vpn_ctx->is_server;
-                tun->set_route = prog->lsquic_vpn_ctx->set_route;
+                tun->change_default_gw = prog->lsquic_vpn_ctx->change_default_gw;
 
                 sport = TAILQ_LAST(prog->prog_sports, sport_head);
                 tun->server_ip = sport->host;
