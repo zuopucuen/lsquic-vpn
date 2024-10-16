@@ -14,6 +14,98 @@
 
 #include "vpn.h"
 
+// 自定义 IP 头部结构体
+struct iphdr {
+    unsigned char  ihl:4;      // IP header length
+    unsigned char  version:4;  // IP version
+    unsigned char  tos;         // Type of service
+    unsigned short tot_len;     // Total length
+    unsigned short id;          // Identification
+    unsigned short frag_off;    // Fragment offset
+    unsigned char  ttl;         // Time to live
+    unsigned char  protocol;    // Protocol
+    unsigned short check;       // Checksum
+    struct in_addr saddr;       // Source address
+    struct in_addr daddr;       // Destination address
+};
+
+// 自定义 ICMP 头部结构体
+struct icmphdr {
+    uint8_t type;               // ICMP message type
+    uint8_t code;               // Type sub-code
+    uint16_t checksum;          // Checksum
+    uint16_t id;                // Identifier
+    uint16_t sequence;          // Sequence number
+};
+
+// ICMP Echo Request type
+#define ICMP_ECHO 8
+#define ICMP_ECHO_REPLY 0
+
+uint16_t checksum(void *b, int len) {
+    uint16_t *buf = b;
+    unsigned int sum = 0;
+    unsigned short result;
+
+    for (sum = 0; len > 1; len -= 2)
+        sum += *buf++;
+    if (len == 1)
+        sum += *(uint8_t *)buf;
+    sum = (sum >> 16) + (sum & 0xFFFF);
+    sum += (sum >> 16);
+    result = ~sum;
+    return result;
+}
+
+// 构建 IP 和 ICMP 报文
+void build_ip_icmp_packet(const char *src_ip, const char *dest_ip, uint16_t id, uint16_t seq, void *buffer) {
+    struct iphdr *ip = (struct iphdr *)buffer;
+    struct icmphdr *icmp = (struct icmphdr *)(buffer + sizeof(struct iphdr));
+
+    // 填充 IP 头部
+    ip->ihl = 5; // IP header length
+    ip->version = 4; // IPv4
+    ip->tos = 0; // Type of service
+    ip->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmphdr)); // Total length
+    ip->id = htons(id); // Identification
+    ip->frag_off = 0; // Fragment offset
+    ip->ttl = 64; // Time to live
+    ip->protocol = IPPROTO_ICMP; // Protocol
+    ip->check = 0; // 校验和，先设为0，后面计算
+    ip->saddr.s_addr = inet_addr(src_ip); // Source address
+    ip->daddr.s_addr = inet_addr(dest_ip); // Destination address
+
+    // 计算 IP 头的校验和
+    ip->check = checksum((void *)ip, sizeof(struct iphdr));
+
+    // 填充 ICMP 头部
+    icmp->type = ICMP_ECHO; // ICMP Echo Request
+    icmp->code = 0; // Code
+    icmp->checksum = 0; // 校验和，先设为0，后面计算
+    icmp->id = htons(id); // Identifier
+    icmp->sequence = htons(seq); // Sequence number
+
+    // 计算 ICMP 头的校验和
+    icmp->checksum = checksum((void *)icmp, sizeof(struct icmphdr));
+}
+
+static void vpn_server_ping_client(lsquic_stream_ctx_t *st_h){
+    lsquic_conn_ctx_t *conn_h;
+    vpn_ctx_t *vpn_ctx;
+    tun_t *tun;
+    uint16_t id = 1234;
+    uint16_t seq = 1;
+    char buffer[1500]; // 缓冲区大小，可以根据需要调整
+    memset(buffer, 0, sizeof(buffer)); // 清空缓冲区
+
+    conn_h = st_h->conn_h;
+    vpn_ctx = conn_h->vpn_ctx;
+    tun = vpn_ctx->tun;
+
+    build_ip_icmp_packet(tun->local_tun_ip, tun->remote_tun_ip, id, seq, buffer);
+    
+}
+
 static lsquic_conn_ctx_t *
 vpn_server_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
 {
@@ -142,17 +234,14 @@ vpn_server_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
             tun->local_tun_ip, 
             tun->remote_tun_ip
         );
-        len = sprintf(st_h->buf, "%s", "server is ok");
-        st_h->buf_off = len;
-        vpn_ctx->tun_fd = tun->fd;
 
+        vpn_ctx->tun_fd = tun->fd;
         vpn_ctx->tun_read_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_READ, tun_read_handler, st_h);
         vpn_ctx->tun_write_ev = event_new(prog_eb(st_h->lsquic_vpn_ctx->prog),
                                    vpn_ctx->tun_fd, EV_WRITE, tun_write_handler, vpn_ctx);
 
         event_add(vpn_ctx->tun_read_ev, NULL);
-        vpn_on_write(stream, st_h);
         lsquic_stream_wantwrite(stream, 0);
 
         goto out;

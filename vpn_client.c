@@ -89,11 +89,6 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
     LSQ_INFO("read from stream %llu: %zd bytes, bufsize: %zu", lsquic_stream_id(stream), len, BUFF_SIZE - buf_used);
 
     if(vpn_ctx->tun_fd == -1){
-        if(strcmp("server is ok", cur_buf) != 0){
-            LSQ_ERROR("Handshake failed: %s", cur_buf);
-            exit(EXIT_FAILURE);
-        }
-
         sport = TAILQ_LAST(st_h->lsquic_vpn_ctx->prog->prog_sports, sport_head);
         
         vpn_ctx->tun = st_h->lsquic_vpn_ctx->tun;
@@ -113,14 +108,9 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
 
         lsquic_stream_wantwrite(stream, 0);
         event_add(vpn_ctx->tun_read_ev, NULL);
-
-        goto end;
     }
-    
-    vpn_ctx->buf_off = vpn_ctx->buf_off + len;
-    vpn_tun_write(vpn_ctx);
 
-end:
+    vpn_tun_write(vpn_ctx);
     lsquic_stream_wantread(stream, 1);
 }
 
