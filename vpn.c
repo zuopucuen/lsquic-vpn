@@ -14,8 +14,6 @@ const char *get_default_gw_ip(void)
         return default_gw_ip;
     }
 
-    execute_command("ps -ef ", default_gw_ip, sizeof(default_gw_ip));
-
     return NULL;
 }
 
