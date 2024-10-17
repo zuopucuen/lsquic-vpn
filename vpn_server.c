@@ -37,7 +37,9 @@ static void vpn_server_ping_client(int fd, short event, void *ctx){
 
     LSQ_INFO("ping client: local ip %s to client ip %s", tun->local_tun_ip, tun->remote_tun_ip);
     
-    vpn_stream_write_handler(-1, -1, st_h);
+    lsquic_stream_wantwrite(st_h->stream, 1);
+    prog_process_conns(st_h->lsquic_vpn_ctx->prog);
+    lsquic_stream_wantwrite(st_h->stream, 0);
 
     tv.tv_sec = 60;
     tv.tv_usec = 0;
