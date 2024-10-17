@@ -59,6 +59,39 @@
 #define STREAM_WRITE_RETRY 3
 #define STREAM_WRITE_RETRY_TIME 1000 // ms
 
+// ICMP Echo Request type
+#define ICMP_ECHO 8
+#define ICMP_ECHO_REPLY 0
+
+// 自定义 IP 头部结构体
+struct iphdr {
+    unsigned char  ihl:4;      // IP header length
+    unsigned char  version:4;  // IP version
+    unsigned char  tos;         // Type of service
+    unsigned short tot_len;     // Total length
+    unsigned short id;          // Identification
+    unsigned short frag_off;    // Fragment offset
+    unsigned char  ttl;         // Time to live
+    unsigned char  protocol;    // Protocol
+    unsigned short check;       // Checksum
+    struct in_addr saddr;       // Source address
+    struct in_addr daddr;       // Destination address
+};
+
+// 自定义 ICMP 头部结构体
+struct icmphdr {
+    uint8_t type;               // ICMP message type
+    uint8_t code;               // Type sub-code
+    uint16_t checksum;          // Checksum
+    uint16_t id;                // Identifier
+    uint16_t sequence;          // Sequence number
+};
+
+typedef struct vpn_ping_s {
+    char ping_packet[64];
+    ssize_t ping_packet_len;
+} vpn_ping_t;
+
 typedef struct tun_s {
     char *local_tun_ip;
     char *remote_tun_ip;
@@ -70,6 +103,7 @@ typedef struct tun_s {
     int is_server;
     int change_default_gw;
     int is_used;
+    vpn_ping_t vpn_ping;
     void *next;
 } tun_t;
 
@@ -82,6 +116,7 @@ typedef struct vpn_ctx_s {
     ssize_t buf_off;
     struct event *tun_read_ev;
     struct event *tun_write_ev;
+    struct event *ping_ev;
     lsquic_conn_ctx_t *conn_h;
 } vpn_ctx_t;
 
@@ -116,6 +151,7 @@ typedef struct lsquic_stream_ctx {
     int retry;
 } lsquic_stream_ctx_t;
 
+void build_ip_icmp_packet(const char *src_ip, const char *dest_ip, uint16_t id, uint16_t seq, void *buffer);
 const char *get_default_gw_ip(void);
 const char *get_default_ext_if_name(void);
 int tun_route_set(tun_t *tun, int set);

@@ -229,11 +229,7 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                 sport = TAILQ_LAST(prog->prog_sports, sport_head);
                 tun->server_ip = sport->host;
                 tun->ext_gw_ip = get_default_gw_ip();
-
-                if(prog->lsquic_vpn_ctx->tun == NULL){
-                    tun->next = prog->lsquic_vpn_ctx->tun;
-                }
-                
+                tun->next = prog->lsquic_vpn_ctx->tun;
                 prog->lsquic_vpn_ctx->tun = tun;
 
                 if(prog->lsquic_vpn_ctx->is_server){
@@ -259,8 +255,12 @@ int prog_parse_config_file(struct prog *prog, const char *filename) {
                     }
                     value++;
                 }
-                if(prog->lsquic_vpn_ctx->is_server)
+                if(prog->lsquic_vpn_ctx->is_server) {
+                    memset(&tun->vpn_ping, 0, sizeof(vpn_ping_t));
+                    build_ip_icmp_packet(tun->local_tun_ip, tun->remote_tun_ip, 1234, 1, tun->vpn_ping.ping_packet);
+                    tun->vpn_ping.ping_packet_len = ntohs(((struct iphdr *)tun->vpn_ping.ping_packet)->tot_len);
                     tun_init(tun);
+                }
             }
         }
     }

@@ -27,8 +27,10 @@ vpn_client_on_new_conn (void *stream_if_ctx, lsquic_conn_t *conn)
     conn_h->lsquic_vpn_ctx = lsquic_vpn_ctx;
     lsquic_vpn_ctx->conn_h = conn_h;
 
+    LSQ_INFO("ctreate new connection.");
     lsquic_conn_ctx_init(conn_h);
     lsquic_conn_make_stream(conn);
+    
     return conn_h;
 }
 
@@ -39,7 +41,7 @@ vpn_client_on_conn_closed (lsquic_conn_t *conn)
     lsquic_conn_ctx_t *conn_h = lsquic_conn_get_ctx(conn);
     vpn_ctx_t * vpn_ctx = conn_h->vpn_ctx;
 
-    if (tun_route_set(vpn_ctx->tun, 0) != 0) {
+    if (vpn_ctx->tun != NULL && tun_route_set(vpn_ctx->tun, 0) != 0) {
         LSQ_ERROR("set Firewall rules faile");
     }
 
@@ -110,10 +112,10 @@ vpn_client_on_read (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
         event_add(vpn_ctx->tun_read_ev, NULL);
     }
 
+    vpn_ctx->buf_off = vpn_ctx->buf_off + len;
     vpn_tun_write(vpn_ctx);
     lsquic_stream_wantread(stream, 1);
 }
-
 
 static void
 vpn_client_on_close (lsquic_stream_t *stream, lsquic_stream_ctx_t *st_h)
