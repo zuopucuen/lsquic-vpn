@@ -57,6 +57,7 @@ prog_init (struct prog *prog, unsigned flags,
     prog->prog_settings.es_ecn      = 0;
 #endif
     prog->prog_settings.es_idle_timeout = 300;
+    prog->prog_settings.es_ping_period = 30000;
     prog->prog_settings.es_cc_algo = 2; // BBRv1
     
     /*
